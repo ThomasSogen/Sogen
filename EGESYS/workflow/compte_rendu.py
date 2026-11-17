@@ -388,3 +388,60 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
     else:
         objet = "Demande non traitée"
     return {"objet": f"EGESYS : {objet}", "corps": corps}
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Mail au client avec ses factures en pièces jointes
+# ---------------------------------------------------------------------------------------------------------------
+# L'utilisateur se contente de transférer le mail du client : le flux Power Automate de réponse envoie en plus ce mail
+# à l'adresse de la fiche client EGESYS (champ A205, jamais une adresse tirée du mail : pas de facture envoyée à un
+# inconnu), avec en pièces jointes les PDF de la liste « pdf ».
+# ⚠ L'objet ne doit pas contenir « EGESYS » (filtre du flux n°1) : si le client répond et que l'utilisateur transfère
+#   sa réponse, elle doit être traitée normalement.
+
+OBJET_CLIENT = "SOGEN : "
+SIGNATURE_CLIENT = "Le service administratif de SOGEN"
+MAIL_CLIENT_VIDE = {"mail": "", "objet": "", "corps": ""}
+MOTIF_MAIL = re.compile(r"[^@\s;,<>]+@[^@\s;,<>]+\.[A-Za-z]{2,}")
+
+
+def mail_client(details_ordres, pdf, ordres_recus=()):
+    """{mail, objet, corps} du mail à envoyer au client avec ses factures, ou des valeurs vides (rien à envoyer) :
+    aucune facture récupérée, adresse mail absente ou invalide sur la fiche, ou factures de plusieurs clients."""
+    avec_factures = [d for d in (details_ordres or []) if d.get("factures")]
+    factures = [f for d in avec_factures for f in d["factures"]]
+    if not factures or not pdf or len({f.get("code_client") for f in factures}) != 1:
+        return dict(MAIL_CLIENT_VIDE)
+    adresse = next((d["mail_client"].strip() for d in avec_factures if (d.get("mail_client") or "").strip()), "")
+    if not MOTIF_MAIL.fullmatch(adresse):
+        return dict(MAIL_CLIENT_VIDE)
+
+    # Période demandée (« toutes les factures de mars ») : reprise de l'ordre de l'agent, s'il y en a une
+    periodes = []
+    for d in avec_factures:
+        index = (d.get("numero") or 0) - 1
+        ordre = ordres_recus[index] if 0 <= index < len(ordres_recus) and isinstance(ordres_recus[index], dict) else {}
+        periode = ordre.get("factures") or {}
+        if periode.get("periode_du") and periode.get("periode_au"):
+            periodes.append(f"du {periode['periode_du']} au {periode['periode_au']}")
+
+    numeros = list(dict.fromkeys(f.get("numero_facture", "") for f in factures))   # sans doublon, dans l'ordre
+    code = factures[0].get("code_client", "")
+    if len(numeros) == 1:
+        objet = f"{OBJET_CLIENT}duplicata de votre facture n° {numeros[0]}"
+        demande = (f"Vous nous avez demandé le duplicata de votre facture n° {e(numeros[0])} (client n° {e(code)}). "
+                   "Vous le trouverez en pièce jointe de ce mail.")
+        elements = []
+    else:
+        objet = f"{OBJET_CLIENT}duplicatas de vos factures"
+        quand = f" {e(' et '.join(periodes))}" if periodes else ""
+        demande = (f"Vous nous avez demandé les duplicatas de vos factures{quand} (client n° {e(code)}). "
+                   f"Vous trouverez les {len(numeros)} factures en pièces jointes de ce mail :")
+        elements = [f"Facture n° {e(n)}" for n in numeros]
+    corps = (f'<div style="{POLICE}">'
+             + paragraphe("Bonjour,", "margin-bottom:10px;")
+             + paragraphe(demande)
+             + (liste(elements) if elements else "")
+             + paragraphe(f"Cordialement,<br>{e(SIGNATURE_CLIENT)}", "margin-top:10px;")
+             + "</div>")
+    return {"mail": adresse, "objet": objet, "corps": corps}

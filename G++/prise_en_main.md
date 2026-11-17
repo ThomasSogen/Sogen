@@ -104,7 +104,13 @@ Mis à jour le 11/11/2026 (chaîne mail ajoutée, voir §10).
 ```
 main.py                     point d'entrée : sous-commandes « facture » et « espace »
 action_facture.py           telecharger_facture(d, cheptel, date_facture, debut, dossier)
+                            telecharger_factures(d, cheptel, periode_du, periode_au, dossier) -> [{chemin, numero, date}]
+                              (17/11/2026 : toutes les factures d'une période, 30 max (MAX_FACTURES d'ordres_genicia),
+                              facture = Type « F » + Transaction en chiffres ; n° contrôlé sur « DETAIL D'UNE FACTURE »
+                              (libellé « Facture n°… ») avant chaque PDF ; QUITTER (ESC) une fois pour revenir à
+                              l'analyse ; la date de Fin n'est pas toujours appliquée par GENICIA++ → filtre en Python)
 action_espace_adherent.py   generer_espace_adherent(d, cheptel, profil) -> {eleveur, profil, destinataire, abonnements}
+action_mail_eleveur.py      lire_mail_eleveur(d, cheptel) -> adresse « e-mail » de la fiche éleveur (lecture seule)
 genicia_auto.py             boîte à outils (voir ci-dessous)
 --- chaîne mail (ajoutée le 11/11/2026, voir §10) ---
 ordres_genicia.py           CATALOGUE des actions par mail (référence unique), lire_reponse, valider, valider_ordre
@@ -259,6 +265,15 @@ Décisions de l'utilisateur (11/11/2026) :
 JSON de l'agent : `{resume, id_message, expediteur, ordres, incertitudes}` ; ordres à plat :
 `{action, justification, cheptel, nom_eleveur, date_facture}` (facture) ou `{…, profil}` (espace, "" → ELWEB1 STANDARD).
 Le cheptel est obligatoire (pas de recherche par nom). Période du bilan pour la facture : 01/01 de l'année de la facture.
+
+Mail au client (17/11/2026) : l'utilisateur transfère simplement le mail du client. Après chaque facture récupérée,
+`executer_ordres.py` lit l'adresse de l'éleveur (`action_mail_eleveur.lire_mail_eleveur` : Bilan Eleveur → F5 FICHE ELV.
+(clic souris ; pendant le chargement le titre n'a plus de crochets, ne pas recliquer) → « CONSULTATION D'UN ELEVEUR »
+1/8 → SUIVANT → champ « e-mail » (pas « e-mail Facture ») → QUITTER sans confirmation), une fois par cheptel ; un échec
+ne fait pas échouer l'ordre. Le résultat de l'ordre porte `mail_client`, `numero_facture`, `date_facture` ;
+`compte_rendu.mail_client()` produit `"client": {mail, objet, corps}` dans `result/<nom>.json` (vide si pas de facture,
+pas d'adresse, ou plusieurs éleveurs). Objet « SOGEN : … » (ni « G++ » ni « GENICIA++ : », pour qu'une réponse du
+client transférée soit traitée). Testé 2 fois sur 64284002.
 
 Fin d'exécution (16/11/2026) : `executer_ordres.py` ferme GENICIA++ par `quitter_application()` (Génicia > Quitter →
 boîte « Confirmation » « Confirmez-vous la sortie de l'application ? » → OUI, clics souris), seulement si l'accueil est

@@ -4,12 +4,20 @@ Des scripts Python qui utilisent le logiciel **GENICIA++** à la place d'un util
 Ils lancent le logiciel, se connectent, cliquent, remplissent les champs et récupèrent
 les informations, sans intervention humaine.
 
-Deux actions sont disponibles :
+Trois actions sont disponibles :
 
 | Action | Ce qu'elle fait | Commande | Nom dans le JSON |
 |---|---|---|---|
 | **facture** | Enregistre en PDF le duplicata d'une facture d'un éleveur | `python main.py facture` | `telecharger_facture` |
+| **factures** (par mail uniquement) | Enregistre en PDF le duplicata de **toutes** les factures d'un éleveur sur une **période** (« toutes les factures de mars », « du 1er trimestre »… ; 30 au maximum). Dans « ANALYSE D'UN BILAN ELEVEUR », seules les lignes de type F dont la Transaction est un n° sont des factures (SOLDE, chèques, prélèvements sont ignorés) ; chaque facture est ouverte, son n° contrôlé, enregistrée, puis retour à l'analyse pour la suivante. Tout ou rien : en cas d'erreur, aucun PDF n'est envoyé | — | `telecharger_factures` (`periode_du`, `periode_au`) |
 | **espace** | Crée l'espace adhérent web d'un éleveur et lui envoie ses identifiants par mail | `python main.py espace 64284002` | `generer_espace_adherent` |
+
+**Espace adhérent vérifié à chaque facture (par mail)** : après chaque récupération de facture(s), le programme ouvre
+la fiche « COMMUNICATION AVEC L'ELEVEUR » de l'éleveur. « Droits : Oui » → rien n'est modifié. « Droits : Non » → l'espace
+est créé comme l'action **espace** (profil ELWEB1 STANDARD, identifiants envoyés par GENICIA++ à l'adresse de la fiche) ;
+l'utilisateur en est averti dans le compte rendu (encadré bleu) et le client dans le mail de ses factures. Une seule
+vérification par éleveur et par mail ; pas de vérification si le mail contient déjà une demande d'espace pour cet éleveur.
+Un échec de cette vérification ne fait pas échouer la facture (encadré orange « à vérifier »).
 
 Elles se lancent **à la main** (section 2) ou **par mail**, sans intervention (section 3) :
 
@@ -137,6 +145,17 @@ Pour chaque `pending/<nom>.json` :
    liste vide s'il n'y en a pas. Les PDF sont copiés dans `result\pdf\` **avant** l'écriture du JSON ; l'original reste
    dans `completed\` ou `error\`. Le flux n°2 lit chaque fichier `/G++/result/pdf/<nom du PDF>` (« Obtenir le contenu du fichier à l'aide du chemin »)
    et l'ajoute en pièce jointe, puis le supprime de `result\pdf\` (nettoyage fait par le flux).
+5. **mail au client** : quand des factures ont été récupérées, le JSON contient aussi
+   `"client": {"mail", "objet", "corps"}`. Le flux n°2 envoie alors un second mail **à l'éleveur**, avec les mêmes PDF
+   (liste `pdf`) en pièces jointes. L'adresse est lue sur la fiche de l'éleveur dans GENICIA++, jamais dans le mail :
+   Bilan Eleveur → F5 FICHE ELV. → SUIVANT → « e-mail » ([action_mail_eleveur.py](action_mail_eleveur.py)).
+   `client.mail` est **vide** (rien à envoyer au client) si aucune facture n'a été récupérée, si la fiche n'a pas
+   d'adresse, ou si le mail concerne plusieurs éleveurs. L'objet commence par « SOGEN : » et le message est signé
+   « Le service administratif de SOGEN » (modifiable dans `veilleur/compte_rendu.py`, `mail_client`).
+
+   Dans le flux n°2, après la réponse à l'utilisateur et **avant** de supprimer les PDF de `result\pdf\` :
+   condition « `client.mail` n'est pas vide » → « Envoyer un e-mail (V2) » : À = `client.mail`,
+   Objet = `client.objet`, Corps = `client.corps`, pièces jointes = les mêmes PDF que la réponse.
 
 | Résultat | Code | Dossier | Objet de la réponse |
 |---|---|---|---|
@@ -202,6 +221,7 @@ Ce veilleur est indépendant de celui d'EGESYS (autres dossiers OneDrive, autre 
 | `main.py` | **Le script à lancer à la main.** Il choisit l'action. |
 | `action_facture.py` | Les étapes de l'action « facture » |
 | `action_espace_adherent.py` | Les étapes de l'action « espace » |
+| `action_mail_eleveur.py` | Lit (sans rien modifier) l'adresse mail de la fiche d'un éleveur, pour lui envoyer ses factures |
 | `genicia_auto.py` | La boîte à outils : lancer, se connecter, cliquer, écrire, lire les listes, gérer les fenêtres |
 | `enregistrer_identifiants.py` | Enregistre vos identifiants dans Windows |
 | `inspecter_ecran.py` | Liste les éléments de l'écran ouvert dans GENICIA++ (dans `arbre_interface.txt`). Sert à préparer une nouvelle action. |

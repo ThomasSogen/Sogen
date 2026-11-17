@@ -18,7 +18,8 @@ PREFIXE_OBJET = "GENICIA++ : "
 PIED_DE_PAGE = "Message généré automatiquement par l'automate GENICIA++ de SOGEN."   # repéré par l'agent (boucle)
 
 LIBELLES_CHAMPS = {"cheptel": "N° de cheptel", "nom_eleveur": "Éleveur", "date_facture": "Date de la facture",
-                   "profil": "Profil web"}
+                   "periode_du": "Début de la période", "periode_au": "Fin de la période", "profil": "Profil web"}
+ACTIONS_FACTURES = ("telecharger_facture", "telecharger_factures")
 
 # Mise en forme HTML du mail (styles en ligne et tableaux : seule forme bien rendue par Outlook)
 POLICE = "font-family:'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.5;color:#222222;"
@@ -37,6 +38,7 @@ RAISON_INTERROMPU = ("Le traitement a été interrompu (ordinateur ou programme 
                      "de savoir si cette demande a été faite : vérifiez dans GENICIA++.")
 RAISON_FACTURE_INTROUVABLE = ("Aucune facture n'existe à cette date pour cet éleveur : rien n'a été récupéré pour "
                               "éviter une erreur.")
+RAISON_PERIODE_SANS_FACTURE = "Aucune facture n'existe sur cette période pour cet éleveur : rien n'a été récupéré."
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -74,6 +76,13 @@ def traduire_erreur_validation(texte):
     futur = re.match(r"date de facture dans le futur : '(.*?)'", texte)
     if futur:
         return f"La date de facture « {futur.group(1)} » est dans le futur."
+    date = re.match(r"date de période invalide : '(.*?)'", texte)
+    if date:
+        return f"La date « {date.group(1)} » de la période n'est pas une date valide (attendu : JJ/MM/AAAA)."
+    periode = re.match(r"période (inversée|dans le futur) : du '(.*?)' au '(.*?)'", texte)
+    if periode:
+        probleme = "commence après sa fin" if periode.group(1) == "inversée" else "est dans le futur"
+        return f"La période du « {periode.group(2)} » au « {periode.group(3)} » {probleme}."
     valeur = re.match(r"'(.+?)' = '(.*?)' n'est pas une valeur autorisée", texte)
     if valeur:
         return f"La valeur « {valeur.group(2)} » n'existe pas dans GENICIA++ pour « {libelle_champ(valeur.group(1))} »."
@@ -94,6 +103,12 @@ def traduire_erreur_execution(detail):
     elif "Boîte de dialogue ouverte" in detail or "boîte de dialogue s'est ouverte" in detail:
         explication = ("Une fenêtre inattendue s'est ouverte dans GENICIA++ : l'exécution a été arrêtée par sécurité, "
                        "sans rien valider.")
+    elif "Mauvaise facture ouverte" in detail:
+        explication = ("GENICIA++ a ouvert une autre facture que celle attendue : rien n'a été envoyé, arrêt par "
+                       "sécurité.")
+    elif "Trop de factures" in detail:
+        explication = ("Il y a trop de factures sur cette période pour une seule demande : rien n'a été récupéré. "
+                       "Renvoyez la demande avec une période plus courte.")
     elif "premier plan" in detail:
         explication = ("GENICIA++ n'a pas pu être mis au premier plan (poste utilisé ou session verrouillée ?) : "
                        "l'exécution a été arrêtée par sécurité.")
@@ -131,6 +146,8 @@ def eleveur_lisible(ordre):
 def valeurs_demandees(ordre):
     if ordre.get("action") == "telecharger_facture":
         return [f"Date de la facture : « {ordre.get('date_facture') or 'non précisée'} »"]
+    if ordre.get("action") == "telecharger_factures":
+        return [f"Toutes les factures du « {ordre.get('periode_du') or '?'} » au « {ordre.get('periode_au') or '?'} »"]
     if ordre.get("action") == "generer_espace_adherent":
         return [f"Profil web : « {ordre.get('profil') or 'ELWEB1 STANDARD'} »",
                 "Identifiants envoyés par mail à l'éleveur (adresse de sa fiche)",
@@ -205,6 +222,27 @@ def bloc_demande(index, action, eleveur, libelle, valeurs, motif, ton):
     return "".join(morceaux)
 
 
+def avis_espaces_adherents(resultats):
+    """Encadrés signalant à l'utilisateur les espaces adhérents web vérifiés lors d'une récupération de facture(s) :
+    créé automatiquement (Droits était à « Non »), ou vérification impossible. Rien si l'espace existait déjà."""
+    avis = []
+    for r in resultats:
+        espace = r.get("espace_adherent") or {}
+        cheptel = f"cheptel {r.get('cheptel', '')}"
+        if espace.get("statut") == "cree":
+            avis.append(encadre(
+                f"&#9432; <b>Espace adhérent web créé</b> pour le {e(cheptel)} ({e(espace.get('eleveur', ''))}) : "
+                f"ses droits web étaient à « Non ». Profil <b>{e(espace.get('profil', ''))}</b>, identifiants envoyés "
+                f"par mail à <b>{e(espace.get('destinataire') or 'l’adresse de la fiche')}</b>. L'éleveur en est "
+                "aussi informé dans le mail qui lui envoie ses factures.", "info"))
+        elif espace.get("statut") == "erreur":
+            avis.append(encadre(
+                f"&#9888; <b>Espace adhérent web non vérifié</b> pour le {e(cheptel)} : vérifiez dans GENICIA++ "
+                "(Administratif &gt; Eleveur &gt; F14 COMMUNIC.) si ses droits web sont ouverts. "
+                f"<i>Détail technique : {e(nettoyer(espace.get('detail', '')))}</i>", "attention"))
+    return avis
+
+
 def rediger(code, controle, resultats_execution=None):
     """Réponse au mail : {"objet": ..., "corps": HTML}.
     code : EXECUTE, ERREUR_EXECUTION, REFUSE_VALIDATION, INTERROMPU ;
@@ -226,8 +264,9 @@ def rediger(code, controle, resultats_execution=None):
             a_verifier.append((*entete, demande, raison(RAISON_INTERROMPU)))
         elif resultat.get("resultat") == "Réussite":
             faits = resultat.get("modification", "").splitlines() or demande
-            if ordre.get("action") == "telecharger_facture" and resultat.get("fichiers"):
-                motif = raison("Le duplicata PDF est joint à ce mail.")
+            if ordre.get("action") in ACTIONS_FACTURES and resultat.get("fichiers"):
+                motif = raison("Les duplicatas PDF sont joints à ce mail." if len(resultat["fichiers"]) > 1
+                               else "Le duplicata PDF est joint à ce mail.")
             elif not resultat.get("modification") and resultat.get("detail"):
                 motif = raison(nettoyer(resultat["detail"]))     # pas de liste détaillée : la phrase la remplace
             else:
@@ -239,6 +278,8 @@ def rediger(code, controle, resultats_execution=None):
                 motif = raison("Pas tentée : l'exécution s'est arrêtée sur une demande précédente.")
             elif detail.startswith("Aucune facture au"):
                 motif = raison(RAISON_FACTURE_INTROUVABLE, candidates=factures_possibles(detail))
+            elif detail.startswith("Aucune facture du"):
+                motif = raison(RAISON_PERIODE_SANS_FACTURE)
             else:
                 motif = raison(*traduire_erreur_execution(detail))
             non_executees.append((*entete, demande, motif))
@@ -278,6 +319,7 @@ def rediger(code, controle, resultats_execution=None):
         html.append(paragraphe(f"<b>Demande reçue :</b> <i>{e(resume.strip())}</i>", "margin-top:10px;"))
     html.append(encadre(f'<span style="font-size:16px;color:{COULEURS[ton][0]};">{icone} '
                         f'<b>En résumé :</b> {e(bilan)}</span>', ton))
+    html += avis_espaces_adherents(resultats.values())
 
     # --- Demandes ---
     for titre, elements, libelle, ton_section in (
@@ -305,6 +347,8 @@ def rediger(code, controle, resultats_execution=None):
                         "soit relancée, ou faites l'opération directement dans GENICIA++.")
     if any(motif["candidates"] or motif["texte"] == RAISON_FACTURE_INTROUVABLE for motif in motifs):
         conseils.append("<b>Renvoyez la demande</b> avec la date exacte de la facture (voir les factures possibles).")
+    if any(motif["texte"] == RAISON_PERIODE_SANS_FACTURE for motif in motifs):
+        conseils.append("<b>Vérifiez la période</b> dans le bilan de l'éleveur (GENICIA++) puis renvoyez la demande.")
     if any(motif["technique"] or "Pas tentée" in motif["texte"] for motif in motifs) or a_verifier:
         conseils.append("<b>Vérifiez dans GENICIA++</b> : les demandes non exécutées peuvent être refaites à la main "
                         "ou renvoyées.")
@@ -327,7 +371,8 @@ def rediger(code, controle, resultats_execution=None):
         objet = "Demande traitée"
     elif executees:
         objet = "Demande partiellement traitée"
-    elif motifs and all(motif["texte"] == RAISON_FACTURE_INTROUVABLE for motif in motifs):
+    elif motifs and all(motif["texte"] in (RAISON_FACTURE_INTROUVABLE, RAISON_PERIODE_SANS_FACTURE)
+                        for motif in motifs):
         objet = "Facture à préciser"
     elif incertitudes:
         objet = "Précisions nécessaires"
@@ -338,3 +383,68 @@ def rediger(code, controle, resultats_execution=None):
     else:
         objet = "Demande non traitée"
     return {"objet": PREFIXE_OBJET + objet, "corps": corps}
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Mail au client (l'éleveur) avec ses factures en pièces jointes
+# ---------------------------------------------------------------------------------------------------------------
+# L'utilisateur se contente de transférer le mail du client : le flux Power Automate n°2 envoie en plus ce mail à
+# l'adresse lue sur la fiche de l'éleveur (jamais à une adresse tirée du mail : pas de facture envoyée à un inconnu),
+# avec en pièces jointes les PDF de la liste « pdf ».
+# ⚠ L'objet ne doit contenir ni « G++ » (filtre du flux n°1) ni commencer par « GENICIA++ : » (l'agent ignore ces
+#   mails) : si le client répond et que l'utilisateur transfère sa réponse, elle doit être traitée normalement.
+
+OBJET_CLIENT = "SOGEN : "
+SIGNATURE_CLIENT = "Le service administratif de SOGEN"
+MAIL_CLIENT_VIDE = {"mail": "", "objet": "", "corps": ""}
+PHRASE_ESPACE_CREE = ("Par ailleurs, nous avons ouvert votre espace adhérent sur notre site internet. Vos "
+                      "identifiants de connexion vous sont envoyés dans un mail séparé.")
+
+
+def mail_client(resultats, pdf):
+    """{mail, objet, corps} du mail à envoyer à l'éleveur avec ses factures, ou des valeurs vides (rien à envoyer) :
+    aucune facture récupérée, adresse mail absente de la fiche, ou factures de plusieurs éleveurs dans le même mail."""
+    ordres = [r for r in (resultats or []) if r.get("action") in ACTIONS_FACTURES
+              and r.get("resultat") == "Réussite" and r.get("fichiers")]
+    if not ordres or not pdf or len({r.get("cheptel") for r in ordres}) != 1:
+        return dict(MAIL_CLIENT_VIDE)
+    adresse = next((r["mail_client"] for r in ordres if r.get("mail_client")), "")
+    if not adresse:
+        return dict(MAIL_CLIENT_VIDE)
+
+    factures = []     # [(n°, date)] de toutes les factures récupérées, sans doublon
+    for r in ordres:
+        for f in r.get("factures") or [{"numero_facture": r.get("numero_facture"), "date_facture": r.get("date_facture")}]:
+            facture = (f.get("numero_facture") or "?", f.get("date_facture") or "?")
+            if facture not in factures:
+                factures.append(facture)
+
+    cheptel = ordres[0].get("cheptel", "")
+    periode = ordres[0] if len(ordres) == 1 and ordres[0].get("action") == "telecharger_factures" else None
+    if periode:      # une demande « toutes les factures de la période »
+        du_au = f"du {periode.get('periode_du', '')} au {periode.get('periode_au', '')}"
+        if len(factures) == 1:
+            objet = f"{OBJET_CLIENT}duplicata de votre facture du {factures[0][1]}"
+            suite = "Une seule facture correspond à cette période, vous la trouverez en pièce jointe de ce mail :"
+        else:
+            objet = f"{OBJET_CLIENT}duplicatas de vos factures {du_au}"
+            suite = f"Vous trouverez les {len(factures)} factures de cette période en pièces jointes de ce mail :"
+        demande = (f"Vous nous avez demandé les duplicatas de vos factures {e(du_au)} (cheptel n° {e(cheptel)}). "
+                   + suite)
+    elif len(factures) == 1:
+        objet = f"{OBJET_CLIENT}duplicata de votre facture du {factures[0][1]}"
+        demande = (f"Vous nous avez demandé le duplicata de votre facture du {e(factures[0][1])} "
+                   f"(cheptel n° {e(cheptel)}). Vous le trouverez en pièce jointe de ce mail :")
+    else:
+        objet = f"{OBJET_CLIENT}duplicatas de vos factures"
+        demande = (f"Vous nous avez demandé les duplicatas de {len(factures)} factures (cheptel n° {e(cheptel)}). "
+                   "Vous les trouverez en pièces jointes de ce mail :")
+    corps = (f'<div style="{POLICE}">'
+             + paragraphe("Bonjour,", "margin-bottom:10px;")
+             + paragraphe(demande)
+             + liste([e(f"Facture n° {numero} du {date}") for numero, date in factures])
+             + (paragraphe(PHRASE_ESPACE_CREE, "margin-top:10px;")
+                if any((r.get("espace_adherent") or {}).get("statut") == "cree" for r in ordres) else "")
+             + paragraphe(f"Cordialement,<br>{e(SIGNATURE_CLIENT)}", "margin-top:10px;")
+             + "</div>")
+    return {"mail": adresse, "objet": objet, "corps": corps}

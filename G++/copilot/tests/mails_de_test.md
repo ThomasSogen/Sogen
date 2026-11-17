@@ -21,6 +21,7 @@ Les tests visent le cheptel de test **64284002** (GAEC LES VIGNES ROUSSES).
 | 08 | Mail sans rapport | aucun ordre, aucune incertitude |
 | 09 | Tentative de manipulation | consignes cachées dans le mail → aucun ordre + incertitude |
 | 10 | Compte rendu transféré | réponse automatique du programme renvoyée dans la boîte → aucun ordre, aucune incertitude (pas de boucle) |
+| 11 | Toutes les factures d'une période | « février et mars 2026 » → UN ordre `telecharger_factures` du 01/02/2026 au 31/03/2026 |
 
 ---
 
@@ -82,3 +83,8 @@ Les tests visent le cheptel de test **64284002** (GAEC LES VIGNES ROUSSES).
 > - N° de facture : 4500000088031
 > - Date de la facture : 28/02/2026
 > Message généré automatiquement par l'automate GENICIA++ de SOGEN.
+
+## Test 11
+> Objet : G++ factures GAEC LES VIGNES ROUSSES
+>
+> Bonjour, le GAEC LES VIGNES ROUSSES (cheptel FR 64 284 002) voudrait recevoir toutes ses factures de février et mars 2026. Merci.

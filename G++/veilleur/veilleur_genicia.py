@@ -10,8 +10,10 @@ Dossiers (<OneDrive Sogen>\G++, trouvé automatiquement sur chaque PC : voir con
   completed/   Toutes les demandes ont réussi
   error/       JSON refusé (incertitude, information manquante) ou erreur pendant l'exécution
   result/      <nom>.json = la réponse au mail d'origine, ÉCRITE EN TOUT DERNIER :
-               {"id_message", "expediteur", "objet", "corps" (HTML), "pdf": [noms des PDF déposés dans result/pdf/]}
-               → le 2e flux Power Automate répond au mail, avec les PDF en pièces jointes
+               {"id_message", "expediteur", "objet", "corps" (HTML), "pdf": [noms des PDF déposés dans result/pdf/],
+                "client": {"mail", "objet", "corps"}}
+               → le 2e flux Power Automate répond au mail, avec les PDF en pièces jointes, et, si client.mail n'est
+                 pas vide, envoie aussi les factures (mêmes PDF) à l'éleveur, à l'adresse de sa fiche GENICIA++
 
 Pour pending/<nom>.json, on trouve à la fin dans completed/ ou error/ :
   <nom>.json, <nom>_valide.json, <nom>_rapport.txt (rapport détaillé), <nom>_resultat.json, <nom>_<fichier>.pdf
@@ -32,6 +34,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from datetime import datetime
@@ -41,8 +44,9 @@ DOSSIER_PROJET = Path(__file__).resolve().parent.parent      # ...\SOGEN\G++
 sys.path.insert(0, str(DOSSIER_PROJET))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ordres_genicia import JsonIllisible, lire_champ_brut, lire_reponse, texte_validation, valider  # noqa: E402
-from compte_rendu import rediger                                                                 # noqa: E402
+from ordres_genicia import (JsonIllisible, factures_max_estimees, lire_champ_brut, lire_reponse,  # noqa: E402
+                            texte_validation, valider)
+from compte_rendu import mail_client, rediger                                                    # noqa: E402
 from config_genicia import DRIVE, FLUX                                                           # noqa: E402
 from poste_actif import POSTE, PosteActif                                                        # noqa: E402
 
@@ -58,6 +62,8 @@ INTERVALLE = 5                 # secondes entre deux passages
 DELAI_SYNCHRO = 3              # fichier modifié il y a moins de 3 s : peut-être encore en cours de synchro
 DELAI_JSON_ILLISIBLE = 60      # un JSON illisible est retenté pendant 60 s avant d'être refusé
 DUREE_MAX_BASE, DUREE_MAX_PAR_ORDRE = 600, 300   # délai maximal d'exécution d'un mail (secondes)
+DUREE_MAX_PAR_FACTURE = 120                       # + par facture attendue (duplicatas sur une période)
+INACTIVITE_MAX = 300           # exécution arrêtée si elle n'affiche plus rien pendant 5 min (GENICIA++ figé)
 
 WINDOWS = sys.platform == "win32"
 SANS_FENETRE = subprocess.CREATE_NO_WINDOW if WINDOWS else 0
@@ -143,20 +149,44 @@ def prendre_verrou():
 # Exécution et publication
 # ---------------------------------------------------------------------------------------------------------------
 
-def executer(valide, travail, nb_ordres):
-    """Lance executer_ordres.py dans un processus séparé ; renvoie (code retour, sortie, résultats par ordre)."""
+def executer(valide, travail, ordres):
+    """Lance executer_ordres.py dans un processus séparé ; renvoie (code retour, sortie, résultats par ordre).
+    Délai maximal : une base, plus un temps par ordre et par facture attendue (plusieurs factures = plus long)."""
+    duree_max = (DUREE_MAX_BASE + DUREE_MAX_PAR_ORDRE * len(ordres)
+                 + DUREE_MAX_PAR_FACTURE * sum(factures_max_estimees(o) for o in ordres))
     resultats_json = travail / "resultats_execution.json"
     commande = [sys.executable, str(DOSSIER_PROJET / "executer_ordres.py"), str(valide),
                 "--fichiers", str(travail / "fichiers"), "--resultats", str(resultats_json)]
     environnement = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+    p = subprocess.Popen(commande, cwd=DOSSIER_PROJET, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                         encoding="utf-8", errors="replace", env=environnement, creationflags=SANS_FENETRE)
+    lignes, derniere_activite = [], [time.time()]
+
+    def lire_sortie():           # chaque ligne affichée par executer_ordres.py = signe de vie
+        for ligne in p.stdout:
+            lignes.append(ligne)
+            derniere_activite[0] = time.time()
+
+    lecteur = threading.Thread(target=lire_sortie, daemon=True)
+    lecteur.start()
+    debut, arret = time.time(), ""
+    while p.poll() is None:
+        if time.time() - derniere_activite[0] > INACTIVITE_MAX:
+            arret = (f"🛑 Aucune activité depuis {INACTIVITE_MAX // 60} min : GENICIA++ semble figé, "
+                     "programme arrêté.")
+        elif time.time() - debut > duree_max:
+            arret = "🛑 Délai d'exécution dépassé : programme arrêté."
+        if arret:
+            p.kill()
+            break
+        time.sleep(1)
     try:
-        p = subprocess.run(commande, cwd=DOSSIER_PROJET, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", env=environnement, creationflags=SANS_FENETRE,
-                           timeout=DUREE_MAX_BASE + DUREE_MAX_PAR_ORDRE * nb_ordres)
-        retour, sortie = p.returncode, p.stdout + p.stderr
-    except subprocess.TimeoutExpired as depasse:
-        sortie = (depasse.stdout or "") if isinstance(depasse.stdout, str) else ""
-        retour, sortie = -1, sortie + "\n🛑 Délai d'exécution dépassé : programme arrêté."
+        p.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        pass
+    lecteur.join(timeout=5)
+    sortie = "".join(lignes) + (f"\n{arret}" if arret else "")
+    retour = -1 if arret else p.returncode
     try:
         resultats = json.loads(resultats_json.read_text(encoding="utf-8"))["ordres"]
     except (OSError, ValueError, KeyError):
@@ -164,7 +194,8 @@ def executer(valide, travail, nb_ordres):
     if retour == -1 and resultats:
         for r in resultats:
             if r["resultat"] == "Non exécuté" and not r["detail"]:
-                r["detail"] = "Délai d'exécution dépassé : GENICIA++ ne répondait plus, arrêt par sécurité."
+                r["detail"] = ("Délai d'exécution dépassé : GENICIA++ ne répondait plus (aucune activité), arrêt par "
+                               "sécurité.")
     return retour, sortie, resultats
 
 
@@ -215,9 +246,13 @@ def publier(nom, destination, code, message, controle, resultats, journal, trava
     if not id_message:
         print(f"⚠️  {nom} : pas d'id_message dans le JSON de l'agent, la réponse au mail ne pourra pas être envoyée.")
     mail = rediger(code, controle, resultats)
+    # Mail au client avec ses factures (pièces jointes = liste « pdf ») ; mail vide = rien à envoyer au client
+    client = mail_client(resultats, pdf)
+    if client["mail"]:
+        print(f"✉️  {nom} : factures à envoyer au client ({client['mail']})")
     RESULT.mkdir(parents=True, exist_ok=True)
-    ecrire_atomique(json.dumps({"id_message": id_message, "expediteur": expediteur, **mail, "pdf": pdf},
-                               ensure_ascii=False, indent=2), RESULT / f"{nom}.json", travail)
+    ecrire_atomique(json.dumps({"id_message": id_message, "expediteur": expediteur, **mail, "pdf": pdf,
+                                "client": client}, ensure_ascii=False, indent=2), RESULT / f"{nom}.json", travail)
 
     shutil.rmtree(travail, ignore_errors=True)
     print(f"{'✅' if destination == COMPLETED else '⚠️ '} {horodatage()} {nom} → {destination.name}/ ({code})")
@@ -249,7 +284,7 @@ def traiter(fichier):
     valide.write_text(json.dumps(controle["ordres"], ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"⚙️  {nom} → processing/ ({len(controle['ordres'])} ordre(s)) : ne touchez pas au poste")
     notifier("GENICIA++ : traitement en cours", f"{nom} — ne touchez ni au clavier ni à la souris")
-    retour, sortie, resultats = executer(valide, travail, len(controle["ordres"]))
+    retour, sortie, resultats = executer(valide, travail, controle["ordres"])
     journal += ["--- Exécution dans GENICIA++ ---", sortie]
 
     if resultats is None:

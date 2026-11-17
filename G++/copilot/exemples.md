@@ -104,7 +104,41 @@ Points d'attention :
 }
 ```
 
-## Exemple 4 : demande hors périmètre
+## Exemple 4 : duplicatas de toutes les factures d'une période
+
+ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX05`
+Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
+
+Mail reçu :
+
+> Objet : G++ factures EARL MOREAU
+>
+> Bonjour, l'EARL MOREAU (cheptel 23456789) voudrait recevoir toutes ses factures du premier trimestre 2026. Merci !
+
+Points d'attention :
+- Plusieurs factures sur une période : UN seul ordre « telecharger_factures », ce n'est pas une incertitude.
+- « premier trimestre 2026 » = du 01/01/2026 au 31/03/2026.
+
+```json
+{
+  "resume": "Duplicatas de toutes les factures du 1er trimestre 2026 de l'EARL MOREAU.",
+  "id_message": "AAMkXXXXXXXXXXXX05",
+  "expediteur": "gestionnaire@exemple.fr",
+  "ordres": [
+    {
+      "action": "telecharger_factures",
+      "justification": "l'EARL MOREAU (cheptel 23456789) voudrait recevoir toutes ses factures du premier trimestre 2026",
+      "cheptel": "23456789",
+      "nom_eleveur": "EARL MOREAU",
+      "periode_du": "01/01/2026",
+      "periode_au": "31/03/2026"
+    }
+  ],
+  "incertitudes": []
+}
+```
+
+## Exemple 5 : demande hors périmètre
 
 ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX04`
 Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`

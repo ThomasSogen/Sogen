@@ -349,7 +349,9 @@ CATALOGUE_ACTIONS = {
     "ajouter_note_client": [
         {"requete": {'WD_BUTTON_CLICK_': 'M3'}, "audit": {"titre_page": "Gestion des clients"}},
         {"requete": {'A24': '{activite_actuelle}', 'A28': '{code_client}', 'A29': '{nom_client}', 'WD_BUTTON_CLICK_': 'A27'}, "audit": {"champs_modifies": {'A28': '{code_client}', 'A29': '{nom_client}'}, "ignorer_vides": True}},
-        {"requete": {'WD_BUTTON_CLICK_': 'A4'}, "audit": {}},
+        # Fiche ouverte : lecture (sans modification) de l'adresse mail du client (A205). Sert après un duplicata de
+        # facture : les factures sont envoyées au client à cette adresse (champ "client" de result/<nom>.json).
+        {"requete": {'WD_BUTTON_CLICK_': 'A4'}, "audit": {}, "lire": {'A205': 'mail_client'}},
         {"requete": {'WD_BUTTON_CLICK_': 'A177'}, "audit": {"titre_page": "Note"}},
         {
             "requete": {
@@ -978,6 +980,11 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
                 print(f"   Par sécurité, aucune {element} n'est sélectionnée : précisez les critères (numéro, date, montant).")
                 sys.exit("Arrêt de sécurité.")
 
+        # Lecture de champs de la page (sans rien envoyer), ex. l'adresse mail de la fiche client : etat['lectures']
+        for champ, variable in etape.get("lire", {}).items():
+            balise = soup_courante.find('input', {'name': champ})
+            etat.setdefault('lectures', {})[variable] = balise.get('value', '').strip() if balise else ''
+
         # 5. TÉLÉCHARGEMENT DU FICHIER GÉNÉRÉ PAR LE SERVEUR (ex: duplicata de facture)
         if "telechargement" in etape:
             telechargement = etape["telechargement"]
@@ -1158,6 +1165,15 @@ if __name__ == "__main__":
         ajouter_au_journal(ordre, resultat, detail, source, modification)
         resultats[numero - 1].update(resultat=resultat, detail=detail, modification=modification)
 
+    def infos_factures(numero, fichiers_ordre):
+        """Duplicatas récupérés : factures (code client, n°) et adresse mail de la fiche (A205, lue pendant la note de
+        suivi) → mail au client avec ses factures (workflow/compte_rendu.py, mail_client)."""
+        factures = factures_des_fichiers(fichiers_ordre)
+        if factures:
+            resultats[numero - 1].update(
+                factures=[{"code_client": code, "numero_facture": numero_facture} for code, numero_facture in factures],
+                mail_client=etat.get('lectures', {}).get('mail_client', ''))
+
     # Journal Excel : nom du mail d'origine (dossier de travail du workflow) ou du fichier d'ordres
     chemin_ordres = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else 'ordre_ia'
     source = os.path.basename(os.path.dirname(chemin_ordres)) if os.path.basename(chemin_ordres).startswith('reponse_copilot') \
@@ -1183,6 +1199,7 @@ if __name__ == "__main__":
                     modification = "\n".join(f"Duplicata PDF récupéré : {os.path.basename(f)}" for f in fichiers_ordre)
                 detail = ""
                 note = note_de_suivi(ordre_original, etat.get('anciennes_valeurs', {}), fichiers_ordre)
+                etat['lectures'] = {}  # Adresse mail lue sur la fiche pendant la note de suivi (factures)
                 if note:
                     etape_en_cours = "note de suivi"
                     # La note est posée sur le client trouvé : même catégorie (actif / inactif), sans nouvelle recherche
@@ -1192,6 +1209,7 @@ if __name__ == "__main__":
                     url_courante, soup_courante = executer_recette(note, session, url_courante, soup_courante, etat)
                     detail = f"Note de suivi ajoutée : « {note['note']['sujet']} »"
                 consigner(numero, ordre_original, "Réussite", detail, source, modification)
+                infos_factures(numero, fichiers_ordre)
             except SystemExit as arret:
                 messages = " | ".join(suivi.lignes) or str(arret)
                 fichiers_ordre = etat.get('fichiers', [])[nb_fichiers_avant:]
@@ -1201,6 +1219,7 @@ if __name__ == "__main__":
                 if etape_en_cours == "note de suivi":
                     consigner(numero, ordre_original, "Erreur",
                               f"Modification faite, mais note de suivi non ajoutée : {messages}", source, modification)
+                    infos_factures(numero, fichiers_ordre)  # Factures récupérées : le client peut quand même les recevoir
                 elif "Par sécurité, aucune" in suivi.texte:
                     consigner(numero, ordre_original, "Non exécuté", messages, source, modification)
                 else:

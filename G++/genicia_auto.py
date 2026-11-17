@@ -16,6 +16,7 @@ from ctypes import byref, c_long, windll
 from typing import Union
 
 import keyring
+import pythoncom
 from pyjab.common.exceptions import JABException
 from pyjab.common.types import JOBJECT64
 from pyjab.jabdriver import JABDriver
@@ -29,6 +30,30 @@ DOSSIER = r"C:\Logicia\Genicia\GPP\packages"
 Cible = Union[JABDriver, JABElement]   # une fenêtre (driver) ou la racine d'une boîte de dialogue
 
 
+# ---------------------------------------------------------------- messages Windows (anti-blocage)
+# Java Access Bridge envoie ses notifications à ce programme par des messages Windows. S'ils ne sont pas traités,
+# ils s'accumulent et GENICIA++ finit par se figer en attendant notre réponse (éléments « introuvables », écran
+# bloqué, programme long à se terminer). D'où : TOUTE attente passe par pause(), qui traite les messages en continu.
+
+def traiter_messages():
+    """Traite les messages Windows/COM en attente (non bloquant, très rapide si la file est vide)."""
+    try:
+        pythoncom.PumpWaitingMessages()
+    except pythoncom.com_error:
+        pass
+
+
+def pause(secondes: float):
+    """Comme time.sleep, mais en traitant les messages Windows toutes les 50 ms."""
+    fin = time.time() + secondes
+    while True:
+        traiter_messages()
+        reste = fin - time.time()
+        if reste <= 0:
+            return
+        time.sleep(min(0.05, reste))
+
+
 # ---------------------------------------------------------------- fenêtres
 
 def fenetres_java():
@@ -36,14 +61,15 @@ def fenetres_java():
             if w.class_name() in ("SunAwtFrame", "SunAwtDialog")]
 
 
-def attendre_fenetre(morceau_titre: str, timeout: float = 60) -> JABDriver:
-    """Attend qu'une fenêtre Java dont le titre contient `morceau_titre` apparaisse."""
+def attendre_fenetre(morceau_titre: str, timeout: float = 60, classe: str = None) -> JABDriver:
+    """Attend qu'une fenêtre Java dont le titre contient `morceau_titre` apparaisse.
+    `classe` : « SunAwtFrame » (fenêtre principale) ou « SunAwtDialog » (boîte), pour ne pas les confondre."""
     fin = time.time() + timeout
     while time.time() < fin:
         for w in fenetres_java():
-            if morceau_titre.lower() in w.window_text().lower():
+            if morceau_titre.lower() in w.window_text().lower() and (classe is None or w.class_name() == classe):
                 return JABDriver(hwnd=w.handle, bridge_dll=DLL_BRIDGE)
-        time.sleep(0.5)
+        pause(0.5)
     titres = [w.window_text() for w in fenetres_java()]
     raise TimeoutError(f"Fenêtre « {morceau_titre} » introuvable. Fenêtres ouvertes : {titres}")
 
@@ -61,7 +87,7 @@ def attendre_dialogue(driver: JABDriver, titre: str, timeout: float = 60) -> JAB
                 vmid, ctx = c_long(), JOBJECT64()
                 if driver.bridge.getAccessibleContextFromHWND(w.handle, byref(vmid), byref(ctx)):
                     return JABElement(driver.bridge, w.handle, vmid, ctx)
-        time.sleep(0.5)
+        pause(0.5)
     raise TimeoutError(f"Boîte « {titre} » introuvable. Fenêtres : {dialogues_ouverts()}")
 
 
@@ -82,7 +108,7 @@ def premier_plan(hwnd) -> bool:
             Desktop(backend="win32").window(handle=hwnd).set_focus()
         except Exception:
             pass
-        time.sleep(0.3)
+        pause(0.3)
     return windll.user32.GetForegroundWindow() == hwnd
 
 
@@ -113,6 +139,7 @@ def elements_affiches(cible: Cible):
     Plus robuste que les recherches de pyjab, qui s'arrêtent à la première erreur
     de Java Access Bridge (éléments cachés ou périmés).
     """
+    traiter_messages()
     pile = [_racine(cible)]
     while pile:
         e = pile.pop()
@@ -142,8 +169,16 @@ def _nom(e):
 
 def visibles(cible: Cible, role: str):
     """Éléments affichés d'un type donné, triés de haut en bas puis de gauche à droite."""
-    elems = [e for e in elements_affiches(cible) if _role(e) == role]
-    return sorted(elems, key=lambda e: (e.bounds["y"], e.bounds["x"]))
+    places = []
+    for e in elements_affiches(cible):
+        if _role(e) != role:
+            continue
+        try:
+            b = e.bounds
+        except JABException:          # élément disparu entre-temps (écran ou liste en cours de rechargement)
+            continue
+        places.append(((b["y"], b["x"]), e))
+    return [e for _, e in sorted(places, key=lambda p: p[0])]
 
 
 def attendre_element(cible: Cible, nom: str, role: str = None, timeout: float = 30):
@@ -155,7 +190,7 @@ def attendre_element(cible: Cible, nom: str, role: str = None, timeout: float = 
                 return e
         if time.time() > fin:
             raise TimeoutError(f"Élément « {nom} » introuvable à l'écran")
-        time.sleep(0.5)
+        pause(0.5)
 
 
 def trouver(cible: Cible, nom: str, role: str = None):
@@ -186,8 +221,8 @@ def clic_souris_element(e: JABElement):
     b = e.bounds
     x, y = b["x"] + b["width"] // 2, b["y"] + b["height"] // 2
     # clic décomposé : un clic instantané est parfois ignoré par Java
-    mouse.move(coords=(x, y)); time.sleep(0.3)
-    mouse.press(coords=(x, y)); time.sleep(0.15)
+    mouse.move(coords=(x, y)); pause(0.3)
+    mouse.press(coords=(x, y)); pause(0.15)
     mouse.release(coords=(x, y))
 
 
@@ -199,16 +234,23 @@ def ouvrir_dialogue(driver: JABDriver, cible: Cible, nom: str, titre: str, role:
     `avant` : fonction appelée avant chaque clic (ex. ouvrir un menu).
     """
     for essai in range(essais):
-        time.sleep(0.5 + essai)
+        pause(0.5 + essai)
         if not dialogue_ouvert(titre):
-            if avant:
-                avant()
-            cliquer_souris(cible, nom, role)
+            try:
+                if avant:
+                    avant()
+                # le menu ouvert par `avant` peut ne pas s'être déroulé (clic ignoré) : délai court, puis nouvel essai
+                cliquer_souris(cible, nom, role, timeout=10 if avant else 30)
+            except TimeoutError:
+                if essai == essais - 1:
+                    raise
+                print(f"   « {nom.strip()} » pas encore affiché : nouvel essai")
+                continue
         fin = time.time() + attente
         while time.time() < fin:
             if dialogue_ouvert(titre):
                 return attendre_dialogue(driver, titre, timeout)
-            time.sleep(0.3)
+            pause(0.3)
     # dernière chance : la boîte peut être lente à apparaître (génération d'un aperçu...)
     return attendre_dialogue(driver, titre, timeout)
 
@@ -222,13 +264,13 @@ def cliquer_souris_jusqua(cible: Cible, nom: str, condition, role: str = None,
     """
     for essai in range(essais):
         if essai:
-            time.sleep(1)
+            pause(1)
         cliquer_souris(cible, nom, role)
         fin = time.time() + attente
         while time.time() < fin:
             if condition():
                 return
-            time.sleep(0.3)
+            pause(0.3)
     raise TimeoutError(f"Le clic sur « {nom.strip()} » n'a pas eu d'effet ({description})")
 
 
@@ -250,7 +292,7 @@ def choisir(combo: JABElement, option: str):
         raise LookupError(f"« {option} » absent de la liste : {options}")
     combo.bridge.clearAccessibleSelectionFromContext(combo.vmid, combo.accessible_context)
     combo.bridge.addAccessibleSelectionFromContext(combo.vmid, combo.accessible_context, options.index(option))
-    time.sleep(0.5)
+    pause(0.5)
     if valeur_liste_deroulante(combo) != option:
         raise RuntimeError(f"La sélection de « {option} » n'a pas été prise en compte")
 
@@ -325,9 +367,9 @@ def attendre_lignes(cible: Cible, timeout: float = 30) -> list[list[str]]:
             lignes = lire_lignes(liste_affichee(cible))
             if lignes:
                 return lignes
-        except IndexError:
+        except (IndexError, JABException):    # liste pas encore affichée, ou en cours de rechargement
             pass
-        time.sleep(0.5)
+        pause(0.5)
     return []
 
 
@@ -352,7 +394,7 @@ def attendre_ecran(titre: str, timeout: float = 30):
     while time.time() < fin:
         if titre_fenetre_principale().lower() == titre.lower():
             return
-        time.sleep(0.5)
+        pause(0.5)
     raise TimeoutError(f"Écran « {titre} » non atteint (écran actuel : {titre_fenetre_principale()})")
 
 
@@ -379,21 +421,34 @@ def rechercher_eleveur(d: JABDriver, cheptel: str, ecran_suivant_pret, timeout: 
             selectionner_ligne(listes[0], index)
             cliquer(d, "VALIDER (F12)")
             break
-        time.sleep(0.5)
+        pause(0.5)
     while time.time() < fin:
         if ecran_suivant_pret():
             return
-        time.sleep(0.5)
+        pause(0.5)
     raise TimeoutError(f"Éleveur {cheptel} : l'écran suivant ne s'est pas affiché")
 
 
-def aller_a(driver: JABDriver, chemin: str, sep: str = " > "):
-    """Suit un chemin de menus/boutons, ex. « Bovin > Taureau > F6 CONSULTER »."""
-    for etape in chemin.split(sep):
-        cliquer(driver, etape.strip())
-        time.sleep(0.5)
-        if dialogues_ouverts():
-            raise RuntimeError(f"Une boîte de dialogue s'est ouverte : {dialogues_ouverts()}")
+def aller_a(driver: JABDriver, chemin: str, sep: str = " > ", essais: int = 2):
+    """Suit un chemin de menus/boutons, ex. « Bovin > Taureau > F6 CONSULTER ».
+
+    Si un menu reste introuvable (GENICIA++ encore occupé à fermer l'écran précédent), retour à l'accueil et nouvel
+    essai : ce ne sont que des clics de navigation, rien n'est validé.
+    """
+    for essai in range(essais):
+        try:
+            for etape in chemin.split(sep):
+                cliquer(driver, etape.strip())
+                pause(0.5)
+                if dialogues_ouverts():
+                    raise RuntimeError(f"Une boîte de dialogue s'est ouverte : {dialogues_ouverts()}")
+            return
+        except TimeoutError:
+            if essai == essais - 1:
+                raise
+            print(f"   Menu « {chemin} » pas encore accessible : nouvel essai")
+            quitter_ecran(driver)
+            pause(3)
 
 
 def quitter_ecran(driver: JABDriver, max_niveaux: int = 6):
@@ -408,9 +463,9 @@ def quitter_ecran(driver: JABDriver, max_niveaux: int = 6):
             return
         try:
             cliquer(driver, "QUITTER (ESC)", timeout=3)
-        except TimeoutError:
-            return
-        time.sleep(1)
+        except (TimeoutError, JABException):   # écran en cours de chargement : on réessaie au tour suivant
+            pass
+        pause(1)
 
 
 # ---------------------------------------------------------------- application
@@ -428,17 +483,98 @@ def application_ouverte() -> bool:
                for w in fenetres_java())
 
 
-def lancer_et_connecter(timeout: float = 180) -> JABDriver:
-    """Lance GENICIA++ si besoin, se connecte, et renvoie la fenêtre principale."""
+def _pids_genicia() -> list[int]:
+    """Processus Java de GENICIA++ en cours (javaw … psaihm.StructAccueilIHM), avec ou sans fenêtre."""
+    commande = ("Get-CimInstance Win32_Process -Filter \"name='javaw.exe'\" | "
+                "Where-Object { $_.CommandLine -match 'StructAccueilIHM' } | ForEach-Object { $_.ProcessId }")
+    try:
+        sortie = subprocess.run(["powershell", "-NoProfile", "-Command", commande], capture_output=True, text=True,
+                                timeout=60, creationflags=subprocess.CREATE_NO_WINDOW).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [int(x) for x in sortie.split() if x.isdigit()]
+
+
+def _pids_sans_fenetre() -> list[int]:
+    avec_fenetre = {w.process_id() for w in fenetres_java()}
+    return [pid for pid in _pids_genicia() if pid not in avec_fenetre]
+
+
+def _arreter_instances_bloquees():
+    """Arrête les GENICIA++ sans aucune fenêtre (bloqués au démarrage ou à la fermeture). Jamais une instance avec
+    fenêtre : elle peut être utilisée par quelqu'un."""
+    for pid in _pids_sans_fenetre():
+        print(f"   GENICIA++ bloqué sans fenêtre (processus {pid}) : arrêt forcé")
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True,
+                       creationflags=subprocess.CREATE_NO_WINDOW)
+
+
+def _attendre_fin_instance_precedente(timeout: float = 60):
+    """Après « Quitter », GENICIA++ met un moment à s'arrêter complètement (Java + base de données). Le relancer
+    pendant ce temps le bloque au démarrage, sans aucune fenêtre. On attend donc la fin de l'instance précédente,
+    puis on arrête ce qui reste (sans fenêtre)."""
+    fin = time.time() + timeout
+    while _pids_sans_fenetre():
+        if time.time() > fin:
+            _arreter_instances_bloquees()
+            pause(5)
+            return
+        pause(2)
+
+
+def lancer_et_connecter(timeout: float = 180, attente_demarrage: float = 90) -> JABDriver:
+    """Lance GENICIA++ si besoin, se connecte, et renvoie la fenêtre principale.
+
+    Jamais d'attente sans fin : si la fenêtre de connexion n'apparaît pas en `attente_demarrage` secondes, l'instance
+    bloquée (sans fenêtre) est arrêtée et GENICIA++ relancé une fois ; au 2e échec, erreur.
+    """
     if not application_ouverte():
-        if not any("informations de session" in w.window_text().lower() for w in fenetres_java()):
-            subprocess.Popen([EXE], cwd=DOSSIER)
-        login = attendre_fenetre("Informations de session", timeout)
-        ident, mdp = identifiants()
-        ecrire(visibles(login, "text")[0], ident)
+        if any("informations de session" in w.window_text().lower() for w in fenetres_java()):
+            login = attendre_fenetre("Informations de session", timeout)
+        else:
+            _attendre_fin_instance_precedente()
+            for essai in range(2):
+                subprocess.Popen([EXE], cwd=DOSSIER)
+                try:
+                    login = attendre_fenetre("Informations de session", attente_demarrage)
+                    break
+                except TimeoutError:
+                    if essai:
+                        raise TimeoutError(f"GENICIA++ ne s'ouvre pas : aucune fenêtre de connexion après "
+                                           f"{attente_demarrage:.0f} s (2 essais)") from None
+                    print(f"   GENICIA++ ne s'affiche pas après {attente_demarrage:.0f} s : arrêt et relance")
+                    _arreter_instances_bloquees()
+                    pause(5)
+        _se_connecter(login)
+    return attendre_fenetre("GENICIA++ v", timeout, classe="SunAwtFrame")
+
+
+def _se_connecter(login: JABDriver, essais: int = 2, attente: float = 120):
+    """Saisit l'identifiant et le mot de passe (jamais affiché), clique OK, puis vérifie que la connexion aboutit
+    (la fenêtre principale s'ouvre). Saisie refaite une fois si l'identifiant ne s'est pas écrit (fenêtre pas encore
+    prête). Jamais de nouvelle saisie après OK : pendant une connexion en cours, GENICIA++ la refuserait."""
+    ident, mdp = identifiants()
+    for essai in range(essais):
+        fin = time.time() + 30                    # champs prêts ?
+        while not (visibles(login, "text") and visibles(login, "password text")):
+            if time.time() > fin:
+                raise TimeoutError("Fenêtre de connexion GENICIA++ : champs de saisie introuvables")
+            pause(0.5)
+        pause(1)
+        champ = visibles(login, "text")[0]
+        ecrire(champ, ident)
         ecrire(visibles(login, "password text")[0], mdp)
+        if (champ.text or "").strip() != ident:
+            print("   Saisie de l'identifiant non prise en compte : nouvelle saisie")
+            continue
         cliquer(login, "OK")
-    return attendre_fenetre("GENICIA++ v", timeout)
+        fin = time.time() + attente
+        while time.time() < fin:
+            if application_ouverte():
+                return
+            pause(0.5)
+        raise TimeoutError(f"Connexion à GENICIA++ sans réponse : fenêtre principale absente {attente:.0f} s après OK")
+    raise RuntimeError("Fenêtre de connexion GENICIA++ : l'identifiant ne s'écrit pas dans le champ")
 
 
 def quitter_application(driver: JABDriver, timeout: float = 60):
@@ -454,9 +590,17 @@ def quitter_application(driver: JABDriver, timeout: float = 60):
     if titre_fenetre_principale() != "ACCUEIL":
         raise RuntimeError(f"GENICIA++ n'est pas à l'accueil ({titre_fenetre_principale()}), laissé ouvert")
 
-    def ouvrir_menu():
-        cliquer_souris(driver, "Génicia", "menu")
-        attendre_element(driver, "Quitter", "menu item", timeout=10)
+    def ouvrir_menu():      # le clic sur le menu est parfois ignoré juste après un retour à l'accueil : on reclique
+        for _ in range(3):
+            cliquer_souris(driver, "Génicia", "menu")
+            try:
+                attendre_element(driver, "Quitter", "menu item", timeout=5)
+                return
+            except TimeoutError:
+                pause(1)
+        raise TimeoutError("Le menu « Génicia » ne s'ouvre pas (entrée « Quitter » introuvable)")
+
+    pause(1)           # laisse l'accueil finir de s'afficher
 
     boite = ouvrir_dialogue(driver, driver, "Quitter", "Confirmation", role="menu item", avant=ouvrir_menu)
     message = " ".join(_nom(e) or "" for e in elements_affiches(boite) if _role(e) == "label")
@@ -467,5 +611,5 @@ def quitter_application(driver: JABDriver, timeout: float = 60):
     while time.time() < fin:
         if not application_ouverte():
             return
-        time.sleep(0.5)
+        pause(0.5)
     raise TimeoutError("GENICIA++ ne s'est pas fermé après OUI")

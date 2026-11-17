@@ -10,7 +10,7 @@ Le fonctionnement détaillé pour l'utilisateur est dans [README.md](README.md) 
 ## 1. Le but du projet
 
 Mettre à jour la base clients de l'intranet **EGESYS** (PC SOFT WebDev 26, interne à SOGEN,
-`http://egesys.sogen.coop/eGESYS`) à partir des mails reçus, sans intervention manuelle. La chaîne :
+`http://egesys.sogen.coop/eGESYS/eGESYS?p1=TEST` = base de TEST ; production : `http://egesys.sogen.coop/eGESYS`) à partir des mails reçus, sans intervention manuelle. La chaîne :
 
 ```
 Mail Outlook → Power Automate → agent Copilot (traduit en ordres JSON) → OneDrive\pending\
@@ -45,7 +45,7 @@ contient de vraies données clients).
 |---|---|
 | `workflow/workflow.py` | Surveille `<OneDrive Sogen>\EGESYS\pending` (trouvé automatiquement, voir `config_egesys.py`) toutes les 5 s. Un seul PC à la fois (`workflow/poste_actif.py`). Attend la synchro et les pièces jointes, valide, bloque IBAN/BIC, déplace dans `processing/`, lance `script_egesys.py`, publie dans `completed/` ou `error/` (écriture atomique), copie les PDF récupérés dans `result/pdf/`, puis écrit `result/<nom>.json` en dernier (clé `pdf` = PDF à joindre). Ne relance jamais un fichier trouvé dans `processing/` (→ `error/`, code INTERROMPU). Une seule instance (`%LOCALAPPDATA%\EGESYS\workflow.lock`). Contient aussi `lancer`, `notifier` (toast Windows), `contient_banque`, `journaliser_blocage`. |
 | `workflow/poste_actif.py` | Un seul PC à la fois : fichier `EGESYS\_poste_actif.json` du OneDrive (PC, signe de vie toutes les 60 s par une tâche de fond, périmé après 5 min). Refus de démarrer si un autre PC est actif ; arrêt si un autre PC a repris. **Copie identique** de `G++\veilleur\poste_actif.py` : modifier les deux. |
-| `workflow/compte_rendu.py` | Réponse au mail : `rediger()` → `{"objet", "corps"}`, corps en HTML à styles en ligne (tableaux pour les encadrés, seule forme fiable dans Outlook). Traduit les messages techniques en français clair. |
+| `workflow/compte_rendu.py` | Réponse au mail : `rediger()` → `{"objet", "corps"}`, corps en HTML à styles en ligne (tableaux pour les encadrés, seule forme fiable dans Outlook). Traduit les messages techniques en français clair. `mail_client()` (17/11/2026) → `"client": {mail, objet, corps}` de `result/<nom>.json` : mail AU CLIENT avec ses duplicatas (mêmes PDF que `pdf`), à l'adresse A205 de sa fiche, lue par l'étape `"lire"` de la recette `ajouter_note_client` (note de suivi) et rangée dans le résultat de l'ordre (`mail_client`, `factures`). Vide si pas de facture, pas d'adresse valide ou plusieurs clients. Objet « SOGEN : … » (jamais « EGESYS »). Lecture A205 testée en lecture seule sur brana ; exécution complète (avec note) à faire lancer par l'utilisateur. |
 | `valider_ordres.py` | Validation hors ligne (structure, listes, obligatoires, IBAN clé de contrôle, RUM, pièces jointes, incertitudes). Écrit `<fichier>_valide.json`. `lire_id_message` / `lire_expediteur` lisent ces clés même dans un JSON cassé. |
 | `lancer_workflow.ps1` + `lancer_workflow.bat` | Options `-Identifiants` (variables utilisateur, saisie masquée), `-Installer`/`-Desinstaller` (raccourci dans `shell:startup`), `-Etat`, `-Arreter` ; sans option = lancement caché, une seule instance, log ajouté à `%LOCALAPPDATA%\EGESYS\workflow.log`. Le `.ps1` doit garder son BOM UTF-8 (sinon PowerShell 5.1 lit mal les accents). |
 

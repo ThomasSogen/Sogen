@@ -21,11 +21,50 @@ from datetime import datetime
 from pathlib import Path
 
 import genicia_auto as g
-from action_espace_adherent import generer_espace_adherent
-from action_facture import telecharger_facture
+from action_espace_adherent import generer_espace_adherent, verifier_espace_adherent
+from action_facture import telecharger_facture, telecharger_factures
+from action_mail_eleveur import lire_mail_eleveur
 from ordres_genicia import lire_date
 
 DOSSIER_FACTURES = Path(__file__).with_name("factures")
+MAILS_LUS = {}   # cheptel -> adresse mail de la fiche (lue une seule fois par exécution)
+
+
+def mail_eleveur(d, cheptel):
+    """Adresse mail de l'éleveur, pour lui envoyer ses factures. Ne fait jamais échouer l'ordre : '' en cas de souci."""
+    if cheptel not in MAILS_LUS:
+        try:
+            MAILS_LUS[cheptel] = lire_mail_eleveur(d, cheptel)
+            print(f"   Adresse mail de l'éleveur : {MAILS_LUS[cheptel] or 'aucune sur la fiche'}")
+        except Exception as erreur:
+            print(f"   ⚠️ Adresse mail de l'éleveur non lue ({erreur}) : pas de mail au client.")
+            MAILS_LUS[cheptel] = ""
+    return MAILS_LUS[cheptel]
+
+
+ESPACES_VERIFIES = set()   # cheptels dont l'espace adhérent a déjà été vérifié pendant cette exécution
+ESPACES_DEMANDES = set()   # cheptels ayant leur propre ordre « generer_espace_adherent » dans le même mail
+
+
+def espace_eleveur(d, cheptel):
+    """Après une récupération de facture(s) : espace adhérent web de l'éleveur vérifié (Droits) et créé s'il ne l'est
+    pas. Une seule fois par éleveur et par exécution. Ne fait jamais échouer l'ordre de facture.
+    Renvoie ({statut: existant | cree | erreur, ...} ou None si rien à signaler, lignes du compte rendu)."""
+    if cheptel in ESPACES_DEMANDES or cheptel in ESPACES_VERIFIES:
+        return None, []
+    ESPACES_VERIFIES.add(cheptel)
+    try:
+        espace = verifier_espace_adherent(d, cheptel)
+    except Exception as erreur:
+        print(f"   ⚠️ Espace adhérent web non vérifié ({erreur})")
+        return ({"statut": "erreur", "detail": str(erreur)},
+                [f"Espace adhérent web : vérification impossible ({erreur}), à contrôler dans GENICIA++"])
+    if espace["statut"] == "existant":
+        return espace, ["Espace adhérent web : déjà ouvert (rien n'a été modifié)"]
+    print(f"   ✅ Espace adhérent web créé, identifiants envoyés à {espace.get('destinataire')}")
+    return espace, ["Espace adhérent web : CRÉÉ automatiquement (Droits était à « Non »), "
+                    f"profil {espace.get('profil')}",
+                    f"Identifiants web envoyés par mail à : {espace.get('destinataire') or 'l’adresse de la fiche'}"]
 
 
 def executer_facture(d, ordre, dossier):
@@ -36,7 +75,24 @@ def executer_facture(d, ordre, dossier):
     detail = f"Duplicata de la facture n° {numero} du {date_facture} récupéré."
     modification = [f"N° de facture : {numero}", f"Date de la facture : {date_facture}",
                     f"Duplicata PDF joint à ce mail : {chemin.name}"]
-    return detail, [chemin.name], modification
+    infos = {"mail_client": mail_eleveur(d, ordre["cheptel"]), "numero_facture": numero, "date_facture": date_facture,
+             "factures": [{"numero_facture": numero, "date_facture": date_facture}]}
+    infos["espace_adherent"], lignes = espace_eleveur(d, ordre["cheptel"])
+    return detail, [chemin.name], modification + lignes, infos
+
+
+def executer_factures(d, ordre, dossier):
+    du, au = ordre["periode_du"], ordre["periode_au"]
+    factures = telecharger_factures(d, ordre["cheptel"], du, au, str(dossier))
+    n, s = len(factures), "s" if len(factures) > 1 else ""
+    detail = f"{n} duplicata{s} de facture du {du} au {au} récupéré{s}."
+    modification = ([f"Période : du {du} au {au}"]
+                    + [f"Facture n° {f['numero']} du {f['date']}" for f in factures]
+                    + [f"{n} duplicata{s} PDF joint{s} à ce mail"])
+    infos = {"mail_client": mail_eleveur(d, ordre["cheptel"]), "periode_du": du, "periode_au": au,
+             "factures": [{"numero_facture": f["numero"], "date_facture": f["date"]} for f in factures]}
+    infos["espace_adherent"], lignes = espace_eleveur(d, ordre["cheptel"])
+    return detail, [Path(f["chemin"]).name for f in factures], modification + lignes, infos
 
 
 def executer_espace(d, ordre, _dossier):
@@ -50,10 +106,11 @@ def executer_espace(d, ordre, _dossier):
                     "Mot de passe : nouveau mot de passe généré (jamais affiché)",
                     f"Identifiants envoyés par mail à : {destinataire}",
                     f"Abonnement factures par mail sans pièce jointe : {abonnement}"]
-    return detail, [], modification
+    return detail, [], modification, {}
 
 
-ACTIONS = {"telecharger_facture": executer_facture, "generer_espace_adherent": executer_espace}
+ACTIONS = {"telecharger_facture": executer_facture, "telecharger_factures": executer_factures,
+           "generer_espace_adherent": executer_espace}
 
 
 def etat_propre():
@@ -77,6 +134,7 @@ def main():
     a = ap.parse_args()
 
     ordres = json.loads(Path(a.ordres).read_text(encoding="utf-8"))
+    ESPACES_DEMANDES.update(o["cheptel"] for o in ordres if o.get("action") == "generer_espace_adherent")
     dossier = Path(a.fichiers)
     dossier.mkdir(parents=True, exist_ok=True)
     resultats = [{"numero": i, "action": o["action"], "cheptel": o["cheptel"], "nom_eleveur": o.get("nom_eleveur", ""),
@@ -102,10 +160,15 @@ def main():
             continue
         print(f"\n{datetime.now():%H:%M:%S} Ordre {r['numero']} : {ordre['action']} — cheptel {ordre['cheptel']}")
         try:
-            r["detail"], r["fichiers"], lignes = ACTIONS[ordre["action"]](d, ordre, dossier)
+            r["detail"], r["fichiers"], lignes, infos = ACTIONS[ordre["action"]](d, ordre, dossier)
             r["modification"] = "\n".join(lignes)
+            r.update(infos)          # factures : mail_client, factures [{numero_facture, date_facture}]... (mail client)
             r["resultat"] = "Réussite"
             print(f"   ✅ {r['detail']}")
+            if not etat_propre():    # ex. lecture du mail interrompue : on ne continue pas à l'aveugle
+                arret = ("Non exécuté : GENICIA++ n'est pas revenu à l'accueil après l'ordre "
+                         f"{r['numero']}, arrêt par sécurité.")
+                print(f"   🛑 {arret}")
         except Exception as erreur:
             r["resultat"] = "Erreur"
             r["detail"] = str(erreur) or type(erreur).__name__

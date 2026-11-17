@@ -22,7 +22,9 @@ Automate de réponse sur ce dossier) :
    "expediteur": expéditeur du mail (recopié par l'agent depuis la requête),
    "objet": objet de la réponse selon le résultat (« EGESYS : Demande traitée », « EGESYS : Précisions nécessaires »…),
    "corps": compte rendu en HTML mis en forme pour Outlook (demandes exécutées, non exécutées avec leur raison, que faire),
-   "pdf": noms des PDF à joindre, présents dans result/pdf/ (ex : ["<nom>_facture_….pdf"], [] si aucun)}
+   "pdf": noms des PDF à joindre, présents dans result/pdf/ (ex : ["<nom>_facture_….pdf"], [] si aucun),
+   "client": {"mail", "objet", "corps"} : mail à envoyer AU CLIENT avec les mêmes PDF (duplicatas de facture), à
+             l'adresse de sa fiche EGESYS (A205) ; "mail" vide = rien à envoyer au client}
 Les PDF récupérés (duplicatas de facture…) sont copiés dans result/pdf/<nom>_<fichier>.pdf AVANT result/<nom>.json.
 
 Lancement en arrière-plan : lancer_workflow.bat (voir lancer_workflow.ps1), journal %LOCALAPPDATA%\EGESYS\workflow.log.
@@ -55,7 +57,7 @@ sys.path.insert(0, str(DOSSIER_SCRIPTS))
 from valider_ordres import lire_reponse, lire_id_message, lire_expediteur   # noqa: E402
 from journal_egesys import ajouter_au_journal                                # noqa: E402
 from script_egesys import lignes_modification                               # noqa: E402
-from compte_rendu import rediger as rediger_compte_rendu                    # noqa: E402
+from compte_rendu import rediger as rediger_compte_rendu, mail_client       # noqa: E402
 import config_egesys                                                        # noqa: E402
 from poste_actif import POSTE, PosteActif                                   # noqa: E402
 
@@ -306,9 +308,14 @@ def publier(nom, destination, statut, code, message, journal, travail, details_o
     expediteur = lire_expediteur(str(travail / NOM_REPONSE))
     if not expediteur:
         print(f"⚠️  {nom} : pas d'expediteur dans le JSON de l'agent.")
+    # Mail au client avec ses factures (mêmes PDF que la liste « pdf ») ; mail vide = rien à envoyer au client
+    client = mail_client(details_ordres if execute else None, pdf_reponse, ordres_recus)
+    if client["mail"]:
+        print(f"✉️  {nom} : factures à envoyer au client ({client['mail']})")
     contenu = {"id_message": id_message, "expediteur": expediteur,
                "objet": reponse_mail["objet"], "corps": reponse_mail["corps"],
-               "pdf": pdf_reponse}  # Noms des PDF de result/pdf/ à joindre à la réponse ([] si aucun)
+               "pdf": pdf_reponse,  # Noms des PDF de result/pdf/ à joindre à la réponse ([] si aucun)
+               "client": client}    # {mail, objet, corps} du mail au client (adresse de sa fiche EGESYS)
     RESULT.mkdir(parents=True, exist_ok=True)
     mettre_en_place(RESULT / f"{nom}.json", texte=json.dumps(contenu, ensure_ascii=False, indent=2))
 

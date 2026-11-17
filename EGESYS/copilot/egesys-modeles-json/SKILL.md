@@ -476,7 +476,7 @@ Enregistrer le duplicata PDF de TOUTES les factures validées du client sur une 
 |---|---|---|---|
 | `justification` | racine | Extrait exact du mail qui justifie cet ordre. | texte libre |
 | `activite_actuelle` | racine | '1' si le mail dit que le client est actif, '0' s'il est inactif (ancien client, a cessé son activité...), sinon "" : le programme cherche alors dans les deux catégories. | voir « Listes de valeurs autorisées » |
-| `code_client` | racine | Code client EGESYS (7 ou 8 chiffres, sans espace) s'il est cité dans le mail, sinon vide. | texte libre |
+| `code_client` | racine | Code client EGESYS (7 ou 8 chiffres, sans espace) s'il est cité dans le mail, sinon vide. « Cheptel » et « numéro d'élevage » désignent aussi le code client. | texte libre |
 | `nom_client` | racine | Nom de famille du client en minuscules, tel qu'on le chercherait dans EGESYS (ex: 'martin'). | texte libre |
 | `civilite` | nouvelle_valeur_client | Nouvelle civilité. | voir « Listes de valeurs autorisées » |
 | `nom` | nouvelle_valeur_client | Nouveau nom. | texte libre |

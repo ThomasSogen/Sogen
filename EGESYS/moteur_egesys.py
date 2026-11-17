@@ -123,7 +123,7 @@ def deconnexion_egesys(session, url_actuelle, soup_actuelle):
 def connexion_egesys(identifiant, mot_de_passe):
     """Initialise la session et connecte l'utilisateur."""
     session = requests.Session()
-    login_url = "http://egesys.sogen.coop/eGESYS"
+    login_url = "http://egesys.sogen.coop/eGESYS/eGESYS?p1=TEST"   # base de TEST
     
     reponse_init = session.get(login_url)
     soup = BeautifulSoup(reponse_init.text, 'html.parser')

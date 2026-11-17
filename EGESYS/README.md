@@ -194,7 +194,8 @@ facture, pièces jointes) et `<nom>_resultat.json` (résultat technique : statut
   "expediteur": "prenom.nom@exemple.fr",
   "objet": "EGESYS : Demande traitée",
   "corps": "<div …>… HTML mis en forme pour Outlook …</div>",
-  "pdf": ["<nom>_facture_<n° client>_<n° facture>.pdf"]
+  "pdf": ["<nom>_facture_<n° client>_<n° facture>.pdf"],
+  "client": {"mail": "…", "objet": "…", "corps": "…"}
 }
 ```
 
@@ -204,6 +205,23 @@ vérifier dans EGESYS », « Demande non traitée ». Le corps est en HTML (gras
 aucun nom de fichier ni jargon : bilan coloré, demandes exécutées (ancienne → nouvelle valeur), demandes non exécutées
 avec ce qui était demandé et la raison, points à clarifier, « Que faire ? ». Le flux Power Automate de réponse se
 déclenche sur `result/`, insère `corps` tel quel dans la réponse et joint les fichiers de `result/pdf/` listés dans `pdf` (liste vide si aucun PDF). Les PDF sont copiés avant l'écriture du JSON : quand le flux se déclenche, ils sont déjà là. Une copie reste dans `completed/`.
+
+**Mail au client avec ses factures** : l'utilisateur se contente de transférer le mail du client. Quand des duplicatas
+ont été récupérés, le JSON contient aussi :
+
+```json
+"client": {"mail": "adresse de la fiche client", "objet": "SOGEN : duplicata de votre facture n° …", "corps": "<div …>…</div>"}
+```
+
+- L'adresse est lue dans la **fiche client EGESYS** (champ A205), au moment où la note de suivi est ajoutée. Elle ne vient
+  jamais du mail : une facture n'est jamais envoyée à une adresse inconnue.
+- `client.mail` est **vide** (rien à envoyer au client) si aucune facture n'a été récupérée, si la fiche n'a pas
+  d'adresse valide, ou si les factures concernent plusieurs clients.
+- Le message (objet « SOGEN : … », signé « Le service administratif de SOGEN ») se modifie dans
+  `workflow/compte_rendu.py`, fonction `mail_client`. L'objet ne contient jamais « EGESYS ».
+- Dans le flux de réponse, après la réponse à l'utilisateur et **avant** de supprimer les PDF de `result/pdf/` : condition
+  « `client.mail` n'est pas vide » → « Envoyer un e-mail (V2) » : À = `client.mail`, Objet = `client.objet`,
+  Corps = `client.corps`, pièces jointes = les mêmes PDF que la réponse.
 
 **Journal Excel** : `journal_egesys.xlsx`, à la racine du OneDrive EGESYS, reçoit une ligne par ordre : date, action, client, valeurs
 modifiées (« ancienne » → « nouvelle », IBAN masqué ; valeurs demandées si l'ordre n'a pas abouti), raison (extrait du

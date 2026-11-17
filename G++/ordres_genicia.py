@@ -19,6 +19,7 @@ from pathlib import Path
 
 PROFILS_WEB = ["ELWEB1 STANDARD", "PRWEB2 STANDART+", "PRWEB3 TECHNIQUE", "PRWEB4 TECHNIQUE+", "PRWEBA BASE"]
 PROFIL_PAR_DEFAUT = "ELWEB1 STANDARD"
+MAX_FACTURES = 30     # factures au plus par demande « telecharger_factures » (même limite que dans action_facture.py)
 
 # Chaque action : description pour l'agent, modèle JSON exact, champs obligatoires, listes fermées.
 # Tous les champs sont des textes ; "" = non précisé dans le mail.
@@ -32,9 +33,27 @@ CATALOGUE = {
         "obligatoires": ["cheptel", "date_facture"],
         "listes": {},
         "champs": {
-            "cheptel": "N° de cheptel de l'éleveur : 8 caractères sans espace (ex : 12345678)",
+            "cheptel": ("N° de cheptel de l'éleveur : 8 caractères sans espace (ex : 12345678). "
+                    "« Code client » et « numéro d'élevage » désignent aussi le n° de cheptel"),
             "nom_eleveur": "Nom de l'éleveur tel qu'écrit dans le mail (information seulement), sinon \"\"",
             "date_facture": "Date de la facture, JJ/MM/AAAA",
+        },
+    },
+    "telecharger_factures": {
+        "libelle": "Duplicatas de factures",
+        "description": ("Récupère le duplicata PDF de TOUTES les factures d'un éleveur sur une période (ex : un mois, "
+                        f"un trimestre, une année ; {MAX_FACTURES} factures maximum). Lecture seule : rien n'est "
+                        "modifié dans GENICIA++."),
+        "modele": {"action": "telecharger_factures", "justification": "", "cheptel": "", "nom_eleveur": "",
+                   "periode_du": "", "periode_au": ""},
+        "obligatoires": ["cheptel", "periode_du", "periode_au"],
+        "listes": {},
+        "champs": {
+            "cheptel": ("N° de cheptel de l'éleveur : 8 caractères sans espace (ex : 12345678). "
+                    "« Code client » et « numéro d'élevage » désignent aussi le n° de cheptel"),
+            "nom_eleveur": "Nom de l'éleveur tel qu'écrit dans le mail (information seulement), sinon \"\"",
+            "periode_du": "Premier jour de la période des factures demandées, JJ/MM/AAAA (ex : mars 2026 → 01/03/2026)",
+            "periode_au": "Dernier jour de la période des factures demandées, JJ/MM/AAAA (ex : mars 2026 → 31/03/2026)",
         },
     },
     "generer_espace_adherent": {
@@ -47,12 +66,25 @@ CATALOGUE = {
         "obligatoires": ["cheptel"],
         "listes": {"profil": PROFILS_WEB},
         "champs": {
-            "cheptel": "N° de cheptel de l'éleveur : 8 caractères sans espace (ex : 12345678)",
+            "cheptel": ("N° de cheptel de l'éleveur : 8 caractères sans espace (ex : 12345678). "
+                    "« Code client » et « numéro d'élevage » désignent aussi le n° de cheptel"),
             "nom_eleveur": "Nom de l'éleveur tel qu'écrit dans le mail (information seulement), sinon \"\"",
             "profil": f"Profil web demandé (liste fermée) ; \"\" si le mail n'en parle pas → {PROFIL_PAR_DEFAUT}",
         },
     },
 }
+
+
+def factures_max_estimees(ordre):
+    """Nombre de factures au plus attendu pour un ordre (sert au délai maximal d'exécution du veilleur) :
+    1 pour une facture, 2 par mois de la période (plafonné à MAX_FACTURES) pour plusieurs factures."""
+    if not isinstance(ordre, dict) or ordre.get("action") != "telecharger_factures":
+        return 1 if isinstance(ordre, dict) and ordre.get("action") == "telecharger_facture" else 0
+    du, au = lire_date(ordre.get("periode_du", "")), lire_date(ordre.get("periode_au", ""))
+    if not du or not au:
+        return MAX_FACTURES
+    mois = (au.year - du.year) * 12 + au.month - du.month + 1
+    return max(1, min(MAX_FACTURES, 2 * mois))
 
 
 def libelle_action(action):
@@ -163,6 +195,18 @@ def valider_ordre(ordre):
             erreurs.append(f"date de facture dans le futur : '{propre['date_facture']}'")
         else:
             propre["date_facture"] = jour.strftime("%d/%m/%Y")
+    if propre.get("periode_du") and propre.get("periode_au"):
+        bornes = {champ: lire_date(propre[champ]) for champ in ("periode_du", "periode_au")}
+        for champ, jour in bornes.items():
+            if jour is None:
+                erreurs.append(f"date de période invalide : '{propre[champ]}' (JJ/MM/AAAA attendu)")
+            else:
+                propre[champ] = jour.strftime("%d/%m/%Y")
+        if None not in bornes.values():
+            if bornes["periode_du"] > bornes["periode_au"]:
+                erreurs.append(f"période inversée : du '{propre['periode_du']}' au '{propre['periode_au']}'")
+            elif bornes["periode_du"] > date.today():
+                erreurs.append(f"période dans le futur : du '{propre['periode_du']}' au '{propre['periode_au']}'")
     if "profil" in propre and not propre["profil"]:
         propre["profil"] = PROFIL_PAR_DEFAUT
     return propre, erreurs

@@ -65,7 +65,8 @@ ACTIONS_DESCRIPTIONS = {
 # Variable de recette → (sous-dossier de l'ordre, description pour le modèle). None = à la racine de l'ordre.
 CHAMPS = {
     "nom_client": (None, "Nom de famille du client en minuscules, tel qu'on le chercherait dans EGESYS (ex: 'martin')."),
-    "code_client": (None, "Code client EGESYS (7 ou 8 chiffres, sans espace) s'il est cité dans le mail, sinon vide."),
+    "code_client": (None, "Code client EGESYS (7 ou 8 chiffres, sans espace) s'il est cité dans le mail, sinon vide. "
+                           "« Cheptel » et « numéro d'élevage » désignent aussi le code client."),
     "activite_actuelle": (None, "'1' si le mail dit que le client est actif, '0' s'il est inactif (ancien client, a cessé "
                                 "son activité...), sinon \"\" : le programme cherche alors dans les deux catégories."),
     "civilite": ("nouvelle_valeur_client", "Nouvelle civilité."),
