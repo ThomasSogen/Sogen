@@ -1,0 +1,24 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "modifier_mail_comptable_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "guitton",
+      "nouvelle_valeur_client": {
+        "mail_comptable": "compta.guitton@exemple.fr"
+      }
+    },
+    {
+      "action": "modifier_telephone_fixe_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "guitton",
+      "nouvelle_valeur_client": {
+        "telephone_fixe": "0559123456"
+      }
+    }
+  ],
+  "incertitudes": []
+}

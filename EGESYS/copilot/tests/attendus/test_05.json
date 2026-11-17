@@ -1,0 +1,24 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "ajouter_modèle_de_reglement_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "guitton",
+      "modèle_de_reglement": {
+        "bic": "AGRIFRPP",
+        "compte general": "",
+        "date_d_application": "01/02/2027",
+        "domiciliation": "CREDIT AGRICOLE",
+        "domiciliation_2": "AGENCE D'OLORON",
+        "echeance": "PRELEVEMENT AU 05",
+        "iban": "FR76 3000 6000 0112 3456 7890 189",
+        "mode_de_reglement": "PRELEVEMENTS",
+        "modèle": "TOUTES FAMILLES",
+        "rum": "RUM2027GUIT001"
+      }
+    }
+  ],
+  "incertitudes": []
+}

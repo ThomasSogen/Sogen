@@ -1,0 +1,20 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "modifier_document_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "guitton",
+      "document_cible": {
+        "libelle_cible": "Contrat approvisionnement 2027"
+      },
+      "document": {
+        "chemin": "",
+        "famille": "DOCUMENTS SOGEN",
+        "libellé": "Contrat approvisionnement 2027 signé"
+      }
+    }
+  ],
+  "incertitudes": []
+}

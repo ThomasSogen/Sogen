@@ -1,0 +1,13 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "generer_espace_adherent",
+      "justification": "*",
+      "cheptel": "64284002",
+      "nom_eleveur": "",
+      "profil": ""
+    }
+  ],
+  "incertitudes": []
+}

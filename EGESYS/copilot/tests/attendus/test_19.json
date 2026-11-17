@@ -1,0 +1,18 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "telecharger_facture_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "brana",
+      "facture": {
+        "date_etat": "",
+        "date_realisation": "",
+        "montant": "",
+        "numero_facture": ""
+      }
+    }
+  ],
+  "incertitudes": []
+}

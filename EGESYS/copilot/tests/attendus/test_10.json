@@ -1,0 +1,16 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "supprimer_note_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "guitton",
+      "note_cible": {
+        "date_cible": "29/10/2026",
+        "sujet_cible": "test"
+      }
+    }
+  ],
+  "incertitudes": []
+}

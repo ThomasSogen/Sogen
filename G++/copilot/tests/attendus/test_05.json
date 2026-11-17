@@ -1,0 +1,15 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "telecharger_facture",
+      "justification": "*",
+      "cheptel": "",
+      "nom_eleveur": "GAEC LES VIGNES ROUSSES",
+      "date_facture": "28/02/2026"
+    }
+  ],
+  "incertitudes": [
+    "*"
+  ]
+}

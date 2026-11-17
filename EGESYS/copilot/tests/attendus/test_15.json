@@ -1,0 +1,26 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "ajouter_modèle_de_reglement_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "guitton",
+      "modèle_de_reglement": {
+        "bic": "",
+        "compte general": "",
+        "date_d_application": "01/03/2027",
+        "domiciliation": "",
+        "domiciliation_2": "",
+        "echeance": "",
+        "iban": "",
+        "mode_de_reglement": "PRELEVEMENTS",
+        "modèle": "TOUTES FAMILLES",
+        "rum": ""
+      }
+    }
+  ],
+  "incertitudes": [
+    "*"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "ajouter_document_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "guitton",
+      "document": {
+        "chemin": "contrat_approvisionnement_2027.pdf",
+        "famille": "CONTRATS",
+        "libellé": "Contrat approvisionnement 2027"
+      }
+    }
+  ],
+  "incertitudes": []
+}

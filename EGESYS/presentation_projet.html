@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automatisation EGESYS</title>
+<style>
+:root {
+  --fond: #f6f7f9; --carte: #ffffff; --texte: #1d2433; --doux: #5b6476; --trait: #e2e6ec;
+  --bleu: #0b5394; --bleu-fond: #e8f0fe; --vert: #1e7e34; --vert-fond: #e8f5e9;
+  --orange: #9a5b00; --orange-fond: #fff6e0; --rouge: #b3261e; --rouge-fond: #fdecea;
+  --violet: #6a3fb5; --violet-fond: #f1ebfb; --code: #f0f2f5;
+  --ombre: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fond: #12151b; --carte: #1b2029; --texte: #e6e9ef; --doux: #9aa3b5; --trait: #2c3340;
+    --bleu: #7fb0f0; --bleu-fond: #18263a; --vert: #6fcf8a; --vert-fond: #16281d;
+    --orange: #f0b45a; --orange-fond: #2e2410; --rouge: #f08a82; --rouge-fond: #331a19;
+    --violet: #b79cf0; --violet-fond: #251d36; --code: #242a35; --ombre: none;
+  }
+}
+:root[data-theme="dark"] {
+  --fond: #12151b; --carte: #1b2029; --texte: #e6e9ef; --doux: #9aa3b5; --trait: #2c3340;
+  --bleu: #7fb0f0; --bleu-fond: #18263a; --vert: #6fcf8a; --vert-fond: #16281d;
+  --orange: #f0b45a; --orange-fond: #2e2410; --rouge: #f08a82; --rouge-fond: #331a19;
+  --violet: #b79cf0; --violet-fond: #251d36; --code: #242a35; --ombre: none;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 70px; }
+body { margin: 0; background: var(--fond); color: var(--texte);
+  font: 15px/1.6 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; }
+code { background: var(--code); padding: 1px 6px; border-radius: 4px; font: 13px Consolas, "Cascadia Mono", monospace; word-break: break-word; }
+a { color: var(--bleu); }
+h1, h2, h3 { line-height: 1.25; margin: 0; }
+
+/* Navigation */
+nav { position: sticky; top: 0; z-index: 10; background: var(--carte); border-bottom: 1px solid var(--trait); }
+nav .interieur { max-width: 1100px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; overflow-x: auto; align-items: center; }
+nav .marque { font-weight: 700; color: var(--bleu); margin-right: 12px; white-space: nowrap; padding: 14px 0; }
+nav a { color: var(--doux); text-decoration: none; padding: 14px 10px; white-space: nowrap; font-size: 14px; border-bottom: 2px solid transparent; }
+nav a:hover, nav a.actif { color: var(--texte); border-bottom-color: var(--bleu); }
+
+main { max-width: 1100px; margin: 0 auto; padding: 0 16px 60px; }
+section { margin-top: 56px; }
+section > h2 { font-size: 24px; margin-bottom: 6px; }
+section > .chapeau { color: var(--doux); margin: 0 0 20px; max-width: 760px; }
+
+/* En-tête */
+.entete { padding: 48px 0 8px; }
+.entete .surtitre { color: var(--bleu); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 13px; }
+.entete h1 { font-size: 34px; margin: 6px 0 12px; }
+.entete p { font-size: 17px; color: var(--doux); max-width: 780px; margin: 0; }
+.chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 12px; margin-top: 28px; }
+.chiffre { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; padding: 16px; box-shadow: var(--ombre); }
+.chiffre b { display: block; font-size: 28px; color: var(--bleu); line-height: 1.1; }
+.chiffre span { color: var(--doux); font-size: 13px; }
+
+/* Circuit */
+.circuit { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(128px, 100%), 1fr)); gap: 10px; row-gap: 18px; counter-reset: etape; }
+.maillon { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; padding: 14px; position: relative; box-shadow: var(--ombre); }
+.maillon::before { counter-increment: etape; content: counter(etape); position: absolute; top: -10px; left: 12px;
+  background: var(--bleu); color: var(--carte); width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+.maillon .ou { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; margin-top: 4px; }
+.maillon h3 { font-size: 15px; margin: 4px 0; }
+.maillon p { margin: 0; font-size: 13px; color: var(--doux); }
+.ou.ms { color: var(--violet); } .ou.pc { color: var(--bleu); } .ou.eg { color: var(--vert); }
+.legende { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--doux); margin-top: 12px; }
+.legende i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+/* Étapes détaillées */
+.etape { display: grid; grid-template-columns: 44px 1fr; gap: 16px; margin-bottom: 18px; }
+.etape .num { width: 44px; height: 44px; border-radius: 50%; background: var(--bleu-fond); color: var(--bleu); font-weight: 700;
+  display: flex; align-items: center; justify-content: center; font-size: 17px; }
+.etape .corps { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; padding: 16px 18px; box-shadow: var(--ombre); }
+.etape h3 { font-size: 17px; margin-bottom: 4px; }
+.etape .qui { font-size: 12px; color: var(--doux); margin-bottom: 8px; }
+.etape ul { margin: 6px 0 0; padding-left: 20px; }
+.etape li { margin: 3px 0; }
+
+/* Cartes et tableaux */
+.grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+.carte { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; padding: 16px 18px; box-shadow: var(--ombre); }
+.carte h3 { font-size: 16px; margin-bottom: 8px; }
+.tableau { width: 100%; border-collapse: collapse; background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; overflow: hidden; font-size: 14px; }
+.tableau th { text-align: left; background: var(--code); color: var(--doux); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+.tableau th, .tableau td { padding: 9px 12px; border-bottom: 1px solid var(--trait); vertical-align: top; }
+.tableau tr:last-child td { border-bottom: 0; }
+.defile { overflow-x: auto; border-radius: 10px; }
+.pastille { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.p-vert { background: var(--vert-fond); color: var(--vert); } .p-orange { background: var(--orange-fond); color: var(--orange); }
+.p-rouge { background: var(--rouge-fond); color: var(--rouge); } .p-bleu { background: var(--bleu-fond); color: var(--bleu); }
+.p-violet { background: var(--violet-fond); color: var(--violet); }
+.encadre { border-left: 4px solid var(--bleu); background: var(--bleu-fond); padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+.encadre.orange { border-color: var(--orange); background: var(--orange-fond); }
+.encadre.rouge { border-color: var(--rouge); background: var(--rouge-fond); }
+.encadre.vert { border-color: var(--vert); background: var(--vert-fond); }
+.liste-actions { list-style: none; padding: 0; margin: 0; }
+.liste-actions li { padding: 6px 0; border-bottom: 1px dashed var(--trait); }
+.liste-actions li:last-child { border-bottom: 0; }
+.liste-actions code { font-size: 12px; }
+.liste-actions .desc { display: block; color: var(--doux); font-size: 13px; }
+
+/* Fichiers */
+details { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; margin-bottom: 10px; box-shadow: var(--ombre); }
+summary { cursor: pointer; padding: 14px 18px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--doux); font-weight: 400; }
+details[open] summary::after { content: "–"; }
+summary .compte { color: var(--doux); font-weight: 400; font-size: 13px; margin-left: auto; margin-right: 8px; }
+details .contenu { padding: 0 18px 14px; }
+.fichier { display: grid; grid-template-columns: minmax(180px, 280px) 1fr; gap: 12px; padding: 9px 0; border-top: 1px solid var(--trait); }
+.fichier .nom code { font-weight: 600; }
+.fichier p { margin: 0; font-size: 14px; }
+.fichier .usage { color: var(--doux); font-size: 13px; margin-top: 2px; }
+
+pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; font: 13px/1.5 Consolas, "Cascadia Mono", monospace; margin: 8px 0; }
+footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 16px; border-top: 1px solid var(--trait); }
+
+@media (max-width: 640px) {
+  .entete h1 { font-size: 26px; }
+  .etape { grid-template-columns: 1fr; }
+  .etape .num { display: none; }
+  .fichier { grid-template-columns: 1fr; gap: 2px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="interieur">
+    <span class="marque">EGESYS auto</span>
+    <a href="#circuit">Circuit</a>
+    <a href="#etapes">Étapes</a>
+    <a href="#actions">Actions</a>
+    <a href="#incertitudes">Incertitudes</a>
+    <a href="#erreurs">Erreurs</a>
+    <a href="#resultats">Résultats</a>
+    <a href="#securite">Sécurité</a>
+    <a href="#fichiers">Fichiers</a>
+    <a href="#exploitation">Exploitation</a>
+  </div>
+</nav>
+
+<main>
+
+<header class="entete">
+  <div class="surtitre">SOGEN · Projet d'automatisation</div>
+  <h1>Du mail à EGESYS, sans saisie manuelle</h1>
+  <p>Un mail demande une modification sur une fiche client ? Un agent Copilot le traduit en ordres précis, un programme
+  sur le PC les vérifie, les exécute dans EGESYS comme le ferait un utilisateur, contrôle chaque écriture, puis répond
+  au mail avec un compte rendu clair. Dans le doute, rien n'est exécuté : la réponse explique ce qu'il faut préciser.</p>
+  <div class="chiffres">
+    <div class="chiffre"><b>19</b><span>actions EGESYS prises en charge</span></div>
+    <div class="chiffre"><b>0</b><span>clic : du mail reçu à la réponse</span></div>
+    <div class="chiffre"><b>6</b><span>issues possibles, chacune expliquée au demandeur</span></div>
+    <div class="chiffre"><b>100 %</b><span>des écritures relues dans EGESYS après enregistrement</span></div>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<section id="circuit">
+  <h2>Le circuit en un coup d'œil</h2>
+  <p class="chapeau">Trois mondes travaillent ensemble : Microsoft 365 (Outlook, Power Automate, Copilot, OneDrive),
+  le PC qui fait tourner le workflow, et EGESYS, l'intranet où sont saisies les modifications.</p>
+  <div class="circuit">
+    <div class="maillon"><div class="ou ms">Microsoft 365</div><h3>Mail reçu</h3><p>Power Automate transmet le mail, son ID et son expéditeur à l'agent.</p></div>
+    <div class="maillon"><div class="ou ms">Microsoft 365</div><h3>Agent Copilot</h3><p>Traduit la demande en ordres JSON et note ses incertitudes.</p></div>
+    <div class="maillon"><div class="ou ms">OneDrive</div><h3>pending/</h3><p>Le JSON et les pièces jointes sont déposés dans le Drive.</p></div>
+    <div class="maillon"><div class="ou pc">PC · workflow</div><h3>Validation</h3><p>Structure, valeurs, IBAN, pièces jointes : tout est contrôlé hors ligne.</p></div>
+    <div class="maillon"><div class="ou eg">EGESYS</div><h3>Exécution</h3><p>Saisie page par page, relecture, note de suivi, déconnexion.</p></div>
+    <div class="maillon"><div class="ou ms">OneDrive</div><h3>completed/ · error/</h3><p>Rangement du dossier complet : JSON, rapport, PDF.</p></div>
+    <div class="maillon"><div class="ou ms">OneDrive → Outlook</div><h3>result/ → réponse</h3><p>Objet + corps HTML : Power Automate répond au mail.</p></div>
+  </div>
+  <div class="legende">
+    <span><i style="background:var(--violet)"></i>Microsoft 365 (cloud)</span>
+    <span><i style="background:var(--bleu)"></i>PC SOGEN (Python)</span>
+    <span><i style="background:var(--vert)"></i>Intranet EGESYS (HTTP)</span>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="etapes">
+  <h2>Les étapes en détail</h2>
+  <p class="chapeau">Ce qui se passe, dans l'ordre, pour chaque mail. Les numéros correspondent au circuit ci-dessus.</p>
+
+  <div class="etape"><div class="num">1</div><div class="corps">
+    <h3>Réception du mail et appel de l'agent</h3>
+    <div class="qui">Power Automate · Outlook</div>
+    Power Automate envoie à l'agent Copilot le contenu du mail, accompagné de deux lignes techniques :
+    <code>ID du message : …</code> (pour pouvoir répondre au bon mail) et <code>Expéditeur : …</code>.
+  </div></div>
+
+  <div class="etape"><div class="num">2</div><div class="corps">
+    <h3>Traduction en ordres par l'agent Copilot</h3>
+    <div class="qui">Agent Copilot · <code>copilot/instructions.md</code> + compétence <code>egesys-modeles-json</code></div>
+    L'agent répond <b>uniquement</b> par un JSON de cinq clés, toujours dans cet ordre :
+    <ul>
+      <li><code>resume</code> : la demande en une phrase ;</li>
+      <li><code>id_message</code> et <code>expediteur</code> : recopiés caractère par caractère depuis la requête ;</li>
+      <li><code>ordres</code> : un ordre par action, en recopiant exactement le modèle JSON de l'action ;</li>
+      <li><code>incertitudes</code> : tout ce qui est ambigu ou manquant (voir <a href="#incertitudes">Incertitudes</a>).</li>
+    </ul>
+    Il ne remplit que ce que le mail dit explicitement, cite l'extrait du mail qui justifie chaque ordre, et n'exécute jamais rien lui-même.
+  </div></div>
+
+  <div class="etape"><div class="num">3</div><div class="corps">
+    <h3>Dépôt dans OneDrive</h3>
+    <div class="qui">Power Automate → <code>OneDrive - Sogen\EGESYS\pending\</code></div>
+    Le JSON de l'agent est enregistré dans <code>pending/</code>, avec les pièces jointes du mail que les ordres citent
+    (contrat à classer, mandat…). OneDrive synchronise le dossier sur le PC.
+  </div></div>
+
+  <div class="etape"><div class="num">4</div><div class="corps">
+    <h3>Prise en charge et validation</h3>
+    <div class="qui">PC · <code>workflow/workflow.py</code> + <code>valider_ordres.py</code></div>
+    Le workflow regarde <code>pending/</code> toutes les 5 secondes. Pour chaque JSON :
+    <ul>
+      <li>il attend que la synchronisation soit terminée (3 s sans modification ; jusqu'à 60 s si le JSON est encore illisible) ;</li>
+      <li>il attend les pièces jointes citées, jusqu'à 10 minutes ;</li>
+      <li>il lance la <b>validation hors ligne</b> : clés exactes, valeurs des listes fermées, champs obligatoires, client identifié, IBAN (clé de contrôle), RUM ≤ 15 caractères, dates JJ/MM/AAAA, montant, pièces jointes présentes ;</li>
+      <li>s'il reste une incertitude ou une erreur, <b>rien n'est exécuté</b> : le dossier part dans <code>error/</code>.</li>
+    </ul>
+  </div></div>
+
+  <div class="etape"><div class="num">5</div><div class="corps">
+    <h3>Garde-fou bancaire</h3>
+    <div class="qui">PC · <code>workflow/workflow.py</code></div>
+    Si un ordre contient un IBAN ou un BIC, il n'est <b>jamais</b> exécuté automatiquement : un changement de RIB reçu
+    par mail est le scénario classique de fraude. La réponse demande de confirmer auprès du client par un autre canal.
+  </div></div>
+
+  <div class="etape"><div class="num">6</div><div class="corps">
+    <h3>Exécution dans EGESYS</h3>
+    <div class="qui">PC → EGESYS · <code>script_egesys.py</code> + <code>moteur_egesys.py</code></div>
+    Le JSON passe dans <code>processing/</code> le temps de l'exécution. Le script :
+    <ul>
+      <li>prend un verrou (une seule connexion EGESYS à la fois, attente jusqu'à 15 min) puis se connecte ;</li>
+      <li>joue la « recette » de chaque action : une suite de pages et de clics, en HTTP, comme un utilisateur ;</li>
+      <li><b>relit</b> chaque valeur après enregistrement, et rouvre la fiche pour vérifier qu'une ligne ajoutée existe bien ;</li>
+      <li>ajoute une <b>note de suivi</b> sur la fiche (ancienne → nouvelle valeur, extrait du mail) ;</li>
+      <li>s'arrête net au premier écart, et se <b>déconnecte toujours</b>, même après une erreur ;</li>
+      <li>pour une facture : télécharge le duplicata PDF seulement si <b>une seule</b> facture correspond.</li>
+    </ul>
+  </div></div>
+
+  <div class="etape"><div class="num">7</div><div class="corps">
+    <h3>Rangement et journal</h3>
+    <div class="qui">PC → <code>completed/</code> ou <code>error/</code> · <code>journal_egesys.py</code></div>
+    Tout ce qui concerne le mail est rangé ensemble : la réponse de l'agent, les ordres validés, le rapport technique,
+    les PDF et pièces jointes, et un résultat technique <code>_resultat.json</code>. Chaque ordre (exécuté ou non)
+    ajoute une ligne colorée au journal Excel <code>journal_egesys.xlsx</code>, à la racine du OneDrive EGESYS.
+  </div></div>
+
+  <div class="etape"><div class="num">8</div><div class="corps">
+    <h3>Réponse au demandeur</h3>
+    <div class="qui">PC → <code>result/</code> → Power Automate → Outlook · <code>workflow/compte_rendu.py</code></div>
+    En tout dernier, le workflow écrit <code>result/&lt;nom&gt;.json</code> :
+<pre>{
+  "id_message": "AAMk…",
+  "expediteur": "prenom.nom@exemple.fr",
+  "objet": "EGESYS : Demande traitée",
+  "corps": "&lt;div …&gt; compte rendu HTML &lt;/div&gt;",
+  "pdf": ["&lt;nom&gt;_facture_….pdf"]
+}</pre>
+    Le corps est un mail mis en forme (bilan coloré, demandes exécutées, non exécutées avec la raison, points à
+    clarifier, « Que faire ? »), sans nom de fichier ni jargon. Power Automate se déclenche sur ce dossier et répond au mail d'origine.
+  </div></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="actions">
+  <h2>Les 19 actions prises en charge</h2>
+  <p class="chapeau">Le client est désigné par son nom, son code client (7 ou 8 chiffres) ou les deux. Chaque action a
+  un modèle JSON exact dans la compétence de l'agent et une recette dans <code>script_egesys.py</code>.</p>
+  <div class="grille">
+    <div class="carte">
+      <h3><span class="pastille p-bleu">9</span> Fiche client</h3>
+      <ul class="liste-actions">
+        <li><code>modifier_civilite_client</code><span class="desc">Liste fermée : ENTREPRISE INDIVIDUELLE, G.A.E.C., E.A.R.L.… (plus de MADAME / MONSIEUR)</span></li>
+        <li><code>modifier_nom_client</code> · <code>modifier_prenom_client</code><span class="desc">Changement d'identité (la civilité ne change pas)</span></li>
+        <li><code>modifier_responsable_client</code><span class="desc">Responsable de l'exploitation</span></li>
+        <li><code>modifier_adresse_client</code><span class="desc">Adresse, code postal, ville</span></li>
+        <li><code>modifier_mail_client</code> · <code>modifier_mail_comptable_client</code><span class="desc">Adresses mail</span></li>
+        <li><code>modifier_telephone_fixe_client</code> · <code>modifier_telephone_portable_client</code><span class="desc">10 chiffres sans espace</span></li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-violet">2</span> Modèle de règlement</h3>
+      <ul class="liste-actions">
+        <li><code>ajouter_modèle_de_reglement_client</code><span class="desc">Nouvelle date d'application : mode de règlement, échéance, famille de produits, compte général, banque, IBAN, BIC, RUM</span></li>
+        <li><code>modifier_modèle_de_reglement_client</code><span class="desc">Corrige une date d'application déjà saisie (désignée par sa date)</span></li>
+      </ul>
+      <div class="encadre orange" style="margin-bottom:0">Une date d'application ne se supprime jamais (règle EGESYS). Avec IBAN ou BIC : jamais exécuté automatiquement.</div>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-bleu">3</span> Documents</h3>
+      <ul class="liste-actions">
+        <li><code>ajouter_document_client</code><span class="desc">Classe la pièce jointe du mail (famille CONTRATS ou DOCUMENTS SOGEN)</span></li>
+        <li><code>modifier_document_client</code><span class="desc">Renomme, reclasse ou remplace un document existant</span></li>
+        <li><code>supprimer_document_client</code><span class="desc">Seulement si le mail le demande clairement</span></li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-bleu">3</span> Notes</h3>
+      <ul class="liste-actions">
+        <li><code>ajouter_note_client</code><span class="desc">Sujet, message, date de rappel, confidentialité, pièce jointe</span></li>
+        <li><code>modifier_note_client</code><span class="desc">Désignée par son sujet (et sa date si connue)</span></li>
+        <li><code>supprimer_note_client</code><span class="desc">Seulement si le mail le demande clairement</span></li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-vert">2</span> Factures (lecture seule)</h3>
+      <ul class="liste-actions">
+        <li><code>telecharger_facture_client</code><span class="desc">Duplicata PDF d'une facture validée. Recherche par numéro (exact), date de facture ou de validation (± 3 jours), montant TTC (± 1 %). Sans critère : la plus récente.</span></li>
+        <li><code>telecharger_factures_client</code><span class="desc">Duplicatas de toutes les factures validées d'une période (ex : un mois), 30 au maximum, un seul client.</span></li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-orange">auto</span> Note de suivi</h3>
+      <p style="margin:0">Après chaque action réussie (fiche, règlement, document, duplicata de facture), le script ajoute lui-même une note sur
+      la fiche : ce qui a changé, ancienne → nouvelle valeur (IBAN masqué) ou n° des factures récupérées, extrait du mail. L'agent ne crée donc jamais de note pour
+      retracer une modification. <br><span style="color:var(--doux);font-size:13px">Désactivée : <code>modifier_activite_client</code>.</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="incertitudes">
+  <h2>Les incertitudes</h2>
+  <p class="chapeau">Une incertitude est un point que l'agent ne peut pas trancher avec certitude à partir du mail.
+  Règle d'or : <b>un ordre manquant se rattrape facilement, un ordre faux beaucoup moins</b>. Dès qu'il y a une
+  incertitude, aucune demande du mail n'est exécutée, et la réponse liste les points à clarifier.</p>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Situation</th><th>Exemple</th><th>Ce qu'il faut fournir</th></tr></thead>
+    <tbody>
+      <tr><td><b>Client actif ou inactif</b></td><td>Client introuvable dans les deux catégories, ou catégorie précisée à tort dans le mail</td><td>Le nom exact ou le code client</td></tr>
+      <tr><td><b>Client non identifié</b></td><td>Pas de nom ni de code client, ou plusieurs clients possibles</td><td>Le nom ou le code client</td></tr>
+      <tr><td><b>Champ obligatoire manquant</b></td><td>Nouveau modèle de règlement sans date d'application</td><td>L'information manquante (date, mode, échéance…)</td></tr>
+      <tr><td><b>Valeur hors liste</b></td><td>Un mode de règlement qui n'existe pas dans EGESYS</td><td>Une valeur autorisée</td></tr>
+      <tr><td><b>Pièce jointe absente</b></td><td>« Ci-joint le contrat » mais rien n'est joint</td><td>Renvoyer le mail avec la pièce jointe</td></tr>
+      <tr><td><b>Demande hors périmètre</b></td><td>Supprimer une date d'application, changer l'activité, demande sans rapport avec EGESYS</td><td>Traitement manuel</td></tr>
+      <tr><td><b>Suppression non explicite</b></td><td>« Ce document n'est plus d'actualité »</td><td>Une demande de suppression claire</td></tr>
+      <tr><td><b>Coordonnée simplement citée</b></td><td>« Vous pouvez la joindre au 06… » : <i>pas</i> une modification, sauf si le mail dit que c'est un nouveau numéro</td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="encadre">Les incertitudes restent toujours dans le JSON : c'est ce qui permet au programme de bloquer
+  l'exécution. Le validateur en ajoute aussi lui-même (client non identifié, champ obligatoire vide, pièce jointe introuvable).</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="erreurs">
+  <h2>Les erreurs et leur traitement</h2>
+  <p class="chapeau">Chaque erreur est traduite en français clair dans la réponse au mail ; le détail technique reste
+  dans le rapport (<code>&lt;nom&gt;_rapport.txt</code>) et le journal Excel.</p>
+
+  <h3 style="margin:18px 0 10px">Avant toute connexion (validation)</h3>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Erreur</th><th>Cause</th><th>Conséquence</th></tr></thead>
+    <tbody>
+      <tr><td>JSON illisible</td><td>Réponse de l'agent mal formée ou coupée (retentée 60 s)</td><td><span class="pastille p-rouge">error/</span> le mail doit être retraité</td></tr>
+      <tr><td>Action inconnue ou désactivée</td><td>L'agent a inventé une action ou utilisé une action désactivée</td><td><span class="pastille p-rouge">error/</span> rien n'est exécuté</td></tr>
+      <tr><td>Clés incorrectes</td><td>Clé ajoutée, renommée ou manquante par rapport au modèle</td><td><span class="pastille p-rouge">error/</span> demande « mal formée »</td></tr>
+      <tr><td>Valeur non autorisée</td><td>Valeur absente d'une liste fermée</td><td><span class="pastille p-rouge">error/</span> la valeur fautive est citée</td></tr>
+      <tr><td>Format invalide</td><td>Code client ≠ 7-8 chiffres, IBAN faux (clé de contrôle), RUM &gt; 15, date non JJ/MM/AAAA, montant ou n° de facture non numérique</td><td><span class="pastille p-rouge">error/</span> rien n'est exécuté</td></tr>
+      <tr><td>IBAN / BIC présent</td><td>Coordonnées bancaires reçues par mail</td><td><span class="pastille p-orange">error/</span> à confirmer auprès du client</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="margin:24px 0 10px">Pendant l'exécution dans EGESYS</h3>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Erreur</th><th>Ce qui s'est passé</th><th>Conséquence</th></tr></thead>
+    <tbody>
+      <tr><td>Échec d'écriture</td><td>Après enregistrement, EGESYS n'affiche pas la valeur attendue, ou la ligne ajoutée/supprimée n'est pas (ou plus) là</td><td><span class="pastille p-rouge">arrêt</span> ordres suivants non tentés</td></tr>
+      <tr><td>Erreur de navigation</td><td>La page attendue n'est pas atteinte (client introuvable, fiche différente)</td><td><span class="pastille p-rouge">arrêt</span> ordres suivants non tentés</td></tr>
+      <tr><td>Facture ambiguë</td><td>Aucune ou plusieurs factures correspondent aux critères</td><td><span class="pastille p-orange">rien n'est pris</span> les factures possibles sont listées</td></tr>
+      <tr><td>Session expirée / connexion</td><td>Page de connexion réapparue, identifiants refusés</td><td><span class="pastille p-rouge">arrêt</span> déconnexion propre</td></tr>
+      <tr><td>Fichier introuvable / pas un PDF</td><td>Pièce jointe disparue, téléchargement de facture anormal</td><td><span class="pastille p-rouge">arrêt</span></td></tr>
+      <tr><td>EGESYS occupé</td><td>Une autre exécution est connectée depuis plus de 15 min (EGESYS refuse deux connexions)</td><td><span class="pastille p-rouge">arrêt</span> à relancer</td></tr>
+      <tr><td>Note de suivi non ajoutée</td><td>La modification est faite mais la note n'a pas pu être créée</td><td><span class="pastille p-orange">exécuté</span> avec un avertissement</td></tr>
+      <tr><td>Traitement interrompu</td><td>PC éteint ou workflow arrêté pendant l'exécution (fichier resté dans <code>processing/</code>)</td><td><span class="pastille p-rouge">jamais relancé</span> à vérifier dans EGESYS</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="encadre orange">Les ordres d'un même mail s'exécutent dans l'ordre : en cas d'arrêt, ceux qui précèdent
+  ont pu être faits. La réponse indique précisément lesquels (« Demande partiellement traitée »).</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="resultats">
+  <h2>Les issues possibles</h2>
+  <p class="chapeau">Chaque mail se termine par un code, un dossier et un objet de réponse. Les « Points à clarifier »
+  et « Que faire ? » de la réponse s'adaptent à chaque cas.</p>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Code</th><th>Situation</th><th>Dossier</th><th>Objet de la réponse</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pastille p-vert">EXECUTE</span></td><td>Tout a été exécuté et vérifié</td><td><code>completed/</code></td><td>EGESYS : Demande traitée</td></tr>
+      <tr><td><span class="pastille p-orange">REFUSE_VALIDATION</span></td><td>Incertitude de l'agent ou erreur de validation</td><td><code>error/</code></td><td>EGESYS : Précisions nécessaires · Demande non traitée</td></tr>
+      <tr><td><span class="pastille p-orange">A_VERIFIER_BANQUE</span></td><td>IBAN ou BIC reçu par mail</td><td><code>error/</code></td><td>EGESYS : Coordonnées bancaires à confirmer</td></tr>
+      <tr><td><span class="pastille p-orange">A_PRECISER</span></td><td>Facture introuvable ou ambiguë</td><td><code>error/</code></td><td>EGESYS : Facture à préciser</td></tr>
+      <tr><td><span class="pastille p-rouge">ERREUR_EXECUTION</span></td><td>Arrêt de sécurité pendant l'exécution</td><td><code>error/</code></td><td>EGESYS : Erreur lors du traitement · Demande partiellement traitée</td></tr>
+      <tr><td><span class="pastille p-rouge">INTERROMPU</span></td><td>Exécution coupée en cours de route</td><td><code>error/</code></td><td>EGESYS : Traitement interrompu, à vérifier dans EGESYS</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="securite">
+  <h2>Les garde-fous</h2>
+  <p class="chapeau">Le système est conçu pour ne jamais faire une modification douteuse.</p>
+  <div class="grille">
+    <div class="carte"><h3>Rien sans certitude</h3>Une seule incertitude ou erreur de validation bloque <b>toutes</b> les demandes du mail.</div>
+    <div class="carte"><h3>Fraude au RIB</h3>IBAN et BIC reçus par mail ne sont jamais saisis automatiquement.</div>
+    <div class="carte"><h3>Relecture systématique</h3>Chaque écriture est relue dans EGESYS ; une ligne ajoutée est recherchée dans la fiche rouverte.</div>
+    <div class="carte"><h3>Arrêt net</h3>Au moindre écart, l'exécution s'arrête au lieu de continuer à l'aveugle.</div>
+    <div class="carte"><h3>Jamais de double saisie</h3>Un traitement interrompu n'est jamais relancé automatiquement.</div>
+    <div class="carte"><h3>Déconnexion garantie</h3>Toujours déconnecté à la fin, et une seule connexion EGESYS à la fois (verrou).</div>
+    <div class="carte"><h3>Boutons interdits</h3>Supprimer, inverser l'état, transferts comptables et « Envoyer » (facture au client) ne sont jamais cliqués.</div>
+    <div class="carte"><h3>Identifiants protégés</h3>Variables d'environnement Windows (<code>EGESYS_IDENTIFIANT</code>, <code>EGESYS_MDP</code>), jamais écrits dans un fichier.</div>
+    <div class="carte"><h3>Traçabilité</h3>Note de suivi sur la fiche, journal Excel, rapport détaillé et réponse au demandeur.</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="fichiers">
+  <h2>À quoi sert chaque fichier</h2>
+  <p class="chapeau">Le projet est dans <code>H:\SOGEN\EGESYS</code>. Cliquez sur un groupe pour le déplier.</p>
+
+  <details open>
+    <summary>Automatisation (le workflow)<span class="compte">4 fichiers</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>workflow/workflow.py</code></div><div><p>Le chef d'orchestre : surveille <code>pending/</code>, attend synchro et pièces jointes, valide, applique le garde-fou bancaire, lance l'exécution, range dans <code>completed/</code> ou <code>error/</code>, écrit la réponse dans <code>result/</code>, notifie sur le bureau.</p><div class="usage">Lancé par <code>lancer_workflow.bat</code> ou <code>python workflow\workflow.py</code></div></div></div>
+      <div class="fichier"><div class="nom"><code>workflow/compte_rendu.py</code></div><div><p>Rédige la réponse au mail : objet selon le résultat et corps HTML mis en forme pour Outlook ; traduit les messages techniques en français clair.</p><div class="usage">Appelé par le workflow</div></div></div>
+      <div class="fichier"><div class="nom"><code>lancer_workflow.bat</code></div><div><p>Point d'entrée Windows (double-clic) : appelle le script PowerShell avec les options.</p><div class="usage"><code>-Identifiants</code>, <code>-Installer</code>, <code>-Desinstaller</code>, <code>-Etat</code>, <code>-Arreter</code></div></div></div>
+      <div class="fichier"><div class="nom"><code>lancer_workflow.ps1</code></div><div><p>Enregistre les identifiants (saisie masquée), lance le workflow en arrière-plan (une seule instance, journal <code>workflow.log</code>), installe le démarrage automatique, donne l'état, arrête.</p><div class="usage">À garder encodé en UTF-8 avec BOM</div></div></div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Exécution dans EGESYS<span class="compte">4 fichiers</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>script_egesys.py</code></div><div><p>Le cœur métier : correspondances des listes déroulantes (<code>MAPPING_*</code>), recette de chaque action (<code>CATALOGUE_ACTIONS</code>), préparation et contrôle des données, exécution avec audits, note de suivi, verrou de connexion, résultats par ordre.</p><div class="usage"><code>python script_egesys.py &lt;fichier&gt;_valide.json</code> (exécution manuelle)</div></div></div>
+      <div class="fichier"><div class="nom"><code>moteur_egesys.py</code></div><div><p>Le moteur HTTP bas niveau : connexion, déconnexion, soumission des pages WebDev, upload et téléchargement de fichiers, lecture des tableaux, sélection de lignes.</p><div class="usage">Ne se modifie qu'en cas de besoin précis</div></div></div>
+      <div class="fichier"><div class="nom"><code>valider_ordres.py</code></div><div><p>Validation hors ligne d'une réponse de l'agent ; écrit <code>_valide.json</code> si tout est correct. Lit aussi <code>id_message</code> et <code>expediteur</code>, même dans un JSON cassé.</p><div class="usage"><code>python valider_ordres.py reponse.json</code></div></div></div>
+      <div class="fichier"><div class="nom"><code>journal_egesys.py</code></div><div><p>Tient le journal Excel : une ligne colorée par ordre (date, action, client, ancienne → nouvelle valeur, raison, résultat, détail, mail).</p><div class="usage">Fichier produit : <code>OneDrive EGESYS\journal_egesys.xlsx</code></div></div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Agent Copilot<span class="compte">5 éléments</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>copilot/instructions.md</code></div><div><p>Instructions à coller dans l'agent : rôle, format de réponse JSON (5 clés), règles de construction, choix de l'action, gestion des incertitudes.</p><div class="usage">Limite Copilot ≈ 8 000 caractères</div></div></div>
+      <div class="fichier"><div class="nom"><code>copilot/egesys-modeles-json/SKILL.md</code></div><div><p>Compétence de l'agent : listes de valeurs autorisées, modèle JSON de chaque action, description des champs, exemples.</p><div class="usage">Générée : ne pas modifier à la main</div></div></div>
+      <div class="fichier"><div class="nom"><code>copilot/exemples_egesys.md</code></div><div><p>Exemples de mails traités avec le JSON attendu (données fictives), repris dans la compétence.</p></div></div>
+      <div class="fichier"><div class="nom"><code>generer_doc_copilot.py</code></div><div><p>Régénère la compétence à partir du catalogue, des listes et des exemples.</p><div class="usage"><code>python generer_doc_copilot.py</code> puis recharger le SKILL.md dans Copilot</div></div></div>
+      <div class="fichier"><div class="nom"><code>extraire_ordres.py</code></div><div><p>Définit le schéma des ordres (descriptions, champs, obligatoires, listes fermées) utilisé par la validation et la compétence. Contient aussi une extraction directe d'un mail par l'API Claude, non utilisée dans la chaîne actuelle.</p></div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Tests de l'agent<span class="compte">3 éléments</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>copilot/tests/mails_de_test.md</code></div><div><p>26 mails de test couvrant les actions, les pièges et les cas d'incertitude, avec le résultat attendu.</p></div></div>
+      <div class="fichier"><div class="nom"><code>copilot/tests/attendus/</code></div><div><p>La réponse JSON attendue pour chaque mail de test (<code>"*"</code> = texte libre accepté).</p></div></div>
+      <div class="fichier"><div class="nom"><code>comparer_reponse_copilot.py</code></div><div><p>Compare une réponse de l'agent à la réponse attendue (sans tenir compte de la casse, des accents et des espaces).</p><div class="usage"><code>python comparer_reponse_copilot.py copilot/tests/attendus/test_05.json reponse.txt</code></div></div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Cartographie d'EGESYS<span class="compte">2 éléments</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>explorer.py</code></div><div><p>Parcourt les pages EGESYS en lecture seule et relève champs, boutons et tableaux. Premier outil à utiliser pour ajouter une action.</p><div class="usage"><code>python explorer.py</code> ou <code>python explorer.py factures</code></div></div></div>
+      <div class="fichier"><div class="nom"><code>cartes/*.json</code></div><div><p>Les cartes des pages (accueil, fiche client, notes, documents, modèles de règlement, factures…), référence pour écrire les recettes.</p></div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Documentation<span class="compte">3 fichiers</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>README.md</code></div><div><p>Guide d'utilisation : circuit, actions, dossiers, codes de résultat, démarrage, évolution.</p></div></div>
+      <div class="fichier"><div class="nom"><code>PRISE_EN_MAIN.md</code></div><div><p>Document de reprise pour le développement : architecture, détails WebDev, procédure d'ajout d'action, règles de travail.</p></div></div>
+      <div class="fichier"><div class="nom"><code>presentation_projet.html</code></div><div><p>Cette page.</p></div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Produits à l'exécution<span class="compte">dossiers</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>%LOCALAPPDATA%\EGESYS\</code></div><div><p>Dossier technique de Windows : journal du workflow (<code>workflow.log</code>), dossier de travail temporaire, verrous (<code>workflow.lock</code>, <code>connexion_egesys.lock</code>) qui garantissent une seule connexion EGESYS et un seul workflow à la fois.</p></div></div>
+      <div class="fichier"><div class="nom"><code>OneDrive - Sogen\EGESYS\pending\</code></div><div><p>Entrée : JSON de l'agent et pièces jointes déposés par Power Automate.</p></div></div>
+      <div class="fichier"><div class="nom"><code>OneDrive - Sogen\EGESYS\processing\</code></div><div><p>JSON en cours d'exécution (doit être vide quand rien ne tourne).</p></div></div>
+      <div class="fichier"><div class="nom"><code>OneDrive - Sogen\EGESYS\completed\</code> · <code>error\</code></div><div><p>Dossier complet de chaque mail : <code>&lt;nom&gt;.json</code>, <code>_valide.json</code>, <code>_rapport.txt</code>, <code>_resultat.json</code>, PDF et pièces jointes.</p></div></div>
+      <div class="fichier"><div class="nom"><code>OneDrive - Sogen\EGESYS\result\</code></div><div><p>Réponse à envoyer au demandeur : <code>id_message</code>, <code>expediteur</code>, <code>objet</code>, <code>corps</code> HTML, <code>pdf</code> (PDF à joindre).</p></div></div>
+      <div class="fichier"><div class="nom"><code>OneDrive - Sogen\EGESYS\result\pdf\</code></div><div><p>PDF récupérés (duplicatas de facture), copiés avant la réponse pour être joints au mail par Power Automate.</p></div></div>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================ -->
+<section id="exploitation">
+  <h2>Exploitation au quotidien</h2>
+  <p class="chapeau">Toutes les commandes se lancent dans PowerShell, depuis <code>H:\SOGEN\EGESYS</code>.</p>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Pour…</th><th>Commande</th></tr></thead>
+    <tbody>
+      <tr><td>Enregistrer les identifiants EGESYS (première fois)</td><td><code>.\lancer_workflow.bat -Identifiants</code></td></tr>
+      <tr><td>Lancer le workflow en arrière-plan</td><td><code>.\lancer_workflow.bat</code> (ou double-clic)</td></tr>
+      <tr><td>Le lancer à chaque ouverture de session</td><td><code>.\lancer_workflow.bat -Installer</code></td></tr>
+      <tr><td>Savoir s'il tourne</td><td><code>.\lancer_workflow.bat -Etat</code></td></tr>
+      <tr><td>Suivre son journal en direct</td><td><code>Get-Content $env:LOCALAPPDATA\EGESYS\workflow.log -Wait -Tail 20 -Encoding UTF8</code></td></tr>
+      <tr><td>L'arrêter (après avoir vérifié que <code>processing/</code> est vide)</td><td><code>.\lancer_workflow.bat -Arreter</code></td></tr>
+      <tr><td>Le lancer au premier plan pour observer</td><td><code>python workflow\workflow.py</code></td></tr>
+      <tr><td>Exécuter à la main un mail bloqué, après vérification</td><td><code>python script_egesys.py "…\error\&lt;nom&gt;_valide.json"</code></td></tr>
+      <tr><td>Vider le OneDrive (completed, error, result, result\pdf)</td><td><code>python nettoyer_onedrive.py</code> (option <code>--jours 30</code> pour garder le dernier mois)</td></tr>
+      <tr><td>Régénérer la compétence de l'agent</td><td><code>python generer_doc_copilot.py</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="margin:28px 0 10px">Ajouter une nouvelle action</h3>
+  <div class="carte">
+    <ol style="margin:0;padding-left:20px">
+      <li>Cartographier les pages concernées avec <code>explorer.py</code> (lecture seule).</li>
+      <li>Écrire la recette dans <code>CATALOGUE_ACTIONS</code> (+ un <code>MAPPING_*</code> si la page a une liste déroulante).</li>
+      <li>Décrire l'action dans <code>extraire_ordres.py</code> et son libellé dans <code>workflow/compte_rendu.py</code>.</li>
+      <li>Régénérer la compétence et la recharger dans l'agent Copilot.</li>
+      <li>Ajouter un mail de test, tester hors ligne, puis une vraie exécution.</li>
+    </ol>
+  </div>
+  <div class="encadre">Les textes chargés dans Copilot ne doivent contenir aucune donnée personnelle ou bancaire
+  réaliste ni formulation du type « ignore tes instructions », sinon Microsoft bloque l'agent. Les exemples utilisent
+  des X et des noms génériques.</div>
+</section>
+
+</main>
+
+<footer>Automatisation EGESYS · SOGEN · Python <code>requests</code> + BeautifulSoup, Microsoft 365 (Copilot, Power Automate, OneDrive)</footer>
+
+<script>
+// Surligne dans le menu la section en cours de lecture
+(function () {
+  var liens = document.querySelectorAll('nav a');
+  var sections = Array.prototype.map.call(liens, function (a) { return document.querySelector(a.getAttribute('href')); });
+  function maj() {
+    var courant = 0;
+    sections.forEach(function (s, i) { if (s && s.getBoundingClientRect().top < 120) courant = i; });
+    liens.forEach(function (a, i) { a.classList.toggle('actif', i === courant); });
+  }
+  document.addEventListener('scroll', maj, { passive: true });
+  maj();
+})();
+</script>
+</body>
+</html>

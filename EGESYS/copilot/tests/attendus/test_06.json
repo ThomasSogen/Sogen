@@ -1,0 +1,26 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "ajouter_modèle_de_reglement_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "guitton",
+      "modèle_de_reglement": {
+        "bic": "PSSTFRPP",
+        "compte general": "",
+        "date_d_application": "",
+        "domiciliation": "",
+        "domiciliation_2": "",
+        "echeance": "PRELEVEMENT AU 10",
+        "iban": "FR14 2004 1010 0505 0001 3M02 606",
+        "mode_de_reglement": "PRELEVEMENTS",
+        "modèle": "TOUTES FAMILLES",
+        "rum": ""
+      }
+    }
+  ],
+  "incertitudes": [
+    "*"
+  ]
+}

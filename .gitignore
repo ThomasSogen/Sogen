@@ -1,0 +1,30 @@
+# Ce qui ne part JAMAIS sur GitHub : fichiers produits à l'exécution, et fichiers contenant de vraies données
+# clients (noms, mails, téléphones, IBAN). Les identifiants ne sont dans aucun fichier du projet.
+
+# Python
+__pycache__/
+*.pyc
+
+# Fichiers produits à l'exécution
+*.log
+*.lock
+*.tmp
+G++/GENICIA_flux/
+G++/factures/
+G++/arbre_interface.txt
+G++/copilot/tests/reponses/*
+!G++/copilot/tests/reponses/.gitkeep
+EGESYS/copilot/tests/reponses/
+
+# Vraies données clients (relevés de la base GENICIA++ et des pages EGESYS) : à garder en local uniquement
+G++/apercu_base.txt
+EGESYS/cartes/
+*.csv
+*.pdf
+*.xlsx
+
+# Fichiers système / éditeur
+desktop.ini
+Thumbs.db
+~$*
+.vscode/

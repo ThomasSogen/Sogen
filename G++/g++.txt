@@ -1,0 +1,2 @@
+Télécharger une facture : Administratif --> Bilan Eleveur --> Numero Cheptel : 64284002 --> Rechercher --> Valide --> Début : 01/01/2026 --> Tubuler --> Selectionner facture 28/02/2026 --> F5 Détailler --> F5 dupplicata --> Récuperer fichier PDF
+Générer espace adhérent : Administratif --> Eleveur --> F14 Communication --> Numéro Cheptel : 64284002 --> Recchercher --> Droits : Oui --> Profil : ELWEB1 Standard --> Cliquer sur la clé --> Enregistrer droits --> Valider --> Factures sans PJ

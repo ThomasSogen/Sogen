@@ -1,0 +1,15 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "modifier_telephone_fixe_client",
+      "justification": "*",
+      "code_client": "CODE_DE_GUITTON",
+      "nom_client": "",
+      "nouvelle_valeur_client": {
+        "telephone_fixe": "0562000000"
+      }
+    }
+  ],
+  "incertitudes": []
+}

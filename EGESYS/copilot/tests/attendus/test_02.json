@@ -1,0 +1,15 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "modifier_civilite_client",
+      "justification": "*",
+      "code_client": "",
+      "nom_client": "guitton",
+      "nouvelle_valeur_client": {
+        "civilite": "G.A.E.C."
+      }
+    }
+  ],
+  "incertitudes": []
+}
