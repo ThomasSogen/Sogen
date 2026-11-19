@@ -24,6 +24,7 @@ import genicia_auto as g
 from action_espace_adherent import generer_espace_adherent, verifier_espace_adherent
 from action_facture import telecharger_facture, telecharger_factures
 from action_mail_eleveur import lire_mail_eleveur
+from file_attente_genicia import GeniciaOccupe, tour_genicia
 from ordres_genicia import lire_date
 
 DOSSIER_FACTURES = Path(__file__).with_name("factures")
@@ -142,6 +143,21 @@ def main():
                  for i, o in enumerate(ordres, start=1)]
     ecrire_resultats(a.resultats, resultats)
 
+    # Un seul programme pilote GENICIA++ à la fois : sinon on attend son tour, dans l'ordre d'arrivée
+    try:
+        with tour_genicia(f"executer_ordres {Path(a.ordres).name}"):
+            piloter(ordres, resultats, dossier, a.resultats)
+    except GeniciaOccupe as erreur:
+        print(f"🛑 {erreur}")
+        for r in resultats:
+            r["detail"] = str(erreur)
+        ecrire_resultats(a.resultats, resultats)
+        sys.exit(1)
+    sys.exit(0 if all(r["resultat"] == "Réussite" for r in resultats) else 1)
+
+
+def piloter(ordres, resultats, dossier, fichier_resultats):
+    """Connexion, exécution de chaque ordre, fermeture de GENICIA++ (appelé quand c'est notre tour)."""
     print(f"{datetime.now():%d/%m/%Y %H:%M:%S} Connexion à GENICIA++...")
     try:
         d = g.lancer_et_connecter()
@@ -150,7 +166,7 @@ def main():
         print(f"🛑 Connexion à GENICIA++ impossible : {erreur}")
         for r in resultats:
             r["detail"] = f"Connexion à GENICIA++ impossible : {erreur}"
-        ecrire_resultats(a.resultats, resultats)
+        ecrire_resultats(fichier_resultats, resultats)
         sys.exit(1)
 
     arret = ""
@@ -178,7 +194,7 @@ def main():
                 arret = ("Non exécuté : GENICIA++ n'est pas revenu à l'accueil après l'erreur de l'ordre "
                          f"{r['numero']}, arrêt par sécurité.")
                 print(f"   🛑 {arret}")
-        ecrire_resultats(a.resultats, resultats)
+        ecrire_resultats(fichier_resultats, resultats)
 
     # Fermeture de GENICIA++ (Génicia > Quitter > OUI), seulement s'il est revenu proprement à l'accueil.
     # Sinon il reste ouvert pour qu'on puisse voir ce qui s'est passé. N'influence pas le résultat des ordres.
@@ -188,8 +204,6 @@ def main():
         print("   ✅ GENICIA++ fermé.")
     except Exception as erreur:
         print(f"   ⚠️ GENICIA++ laissé ouvert : {erreur}")
-
-    sys.exit(0 if all(r["resultat"] == "Réussite" for r in resultats) else 1)
 
 
 if __name__ == "__main__":

@@ -785,7 +785,7 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
                     break
                 print(f"🖱️ Clic sur le bouton : {cible['bouton']} (depuis '{titre_actuel.strip()}')")
                 reponse, soup_courante = soumettre_page_webdev(session, url_courante, soup_courante,
-                                                              {'WD_BUTTON_CLICK_': cible['bouton']})
+                                                              ajouter_cases_cochees({'WD_BUTTON_CLICK_': cible['bouton']}, soup_courante))
                 url_courante = reponse.url
                 etat['url'], etat['soup'] = url_courante, soup_courante
             titre_actuel = soup_courante.title.string if soup_courante.title else ""
@@ -890,6 +890,9 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
             else:
                 ancienne = balise.get_text() if balise.name == 'textarea' else balise.get('value', '')
             etat['anciennes_valeurs'][variable.group(1)] = '' if ancienne.strip('-') == '' else ancienne
+
+        # Cases cochées de la page renvoyées telles quelles (ex : "Client Actif" A197 de la fiche client)
+        ajouter_cases_cochees(payload_final, soup_courante)
 
         # 3. EXÉCUTION
         reponse, soup_courante = soumettre_page_webdev(session, url_courante, soup_courante, payload_final, fichiers_finaux)
@@ -1012,6 +1015,22 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
                                                                      session, url_courante, soup_courante, etat)
 
     return url_courante, soup_courante
+
+
+def ajouter_cases_cochees(payload, soup):
+    """Ajoute au payload les cases à cocher et boutons radio COCHÉS de la page, comme le ferait un navigateur.
+
+    WebDev relit l'état des cases à chaque envoi du formulaire : une case absente de la requête est considérée comme
+    DÉCOCHÉE. Sans cela, tout clic sur la fiche client (Enregistrer A4, ouverture d'une note A177, d'un document,
+    d'un modèle de règlement…) décochait "Client Actif" (A197) puis l'enregistrait : le client devenait inactif.
+    Même risque pour "Blocage de commande" (A259). Les valeurs déjà prévues par la recette ne sont jamais remplacées."""
+    formulaire = soup.find('form') if soup else None
+    for balise in (formulaire.find_all('input') if formulaire else []):
+        nom = balise.get('name')
+        if (nom and nom not in payload and (balise.get('type') or '').lower() in ('checkbox', 'radio')
+                and balise.has_attr('checked')):
+            payload[nom] = balise.get('value', '')
+    return payload
 
 
 def action_cherche_client(action):

@@ -126,6 +126,10 @@ Client désigné par `nom_client`, `code_client` (7-8 chiffres) ou les deux.
 - Boutons cliqués via `WD_BUTTON_CLICK_=<alias>`.
 - Listes déroulantes : on envoie la **valeur** de l'`<option>`, pas le texte → d'où les `MAPPING_*`.
 - Champs de zones répétées : utiliser le **name** (`zrl_1_A35`), pas l'id.
+- **Cases à cocher** : WebDev relit leur état à chaque envoi du formulaire ; une case absente de la requête = décochée.
+  Bug corrigé le 18/11/2026 : chaque clic sur la fiche client (Enregistrer, Note, Document, Modèle…) décochait
+  « Client Actif » (A197) → le client devenait inactif. `ajouter_cases_cochees()` (script_egesys.py) renvoie
+  désormais les cases et radios cochés de la page avant chaque envoi, sans remplacer les valeurs de la recette.
 - Si la page de login (champ `A4`) réapparaît → session expirée → fail-fast.
 - Recherche client (« Gestion des clients ») : `A24` = case « Clients Actifs » (`1` actifs, `0` inactifs), résultats dans
   le tableau `A12`. `activite_actuelle` vide (non précisée par le mail) → `0`, puis `1` si `A12` est vide

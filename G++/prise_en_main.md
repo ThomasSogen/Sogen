@@ -112,6 +112,11 @@ action_facture.py           telecharger_facture(d, cheptel, date_facture, debut,
 action_espace_adherent.py   generer_espace_adherent(d, cheptel, profil) -> {eleveur, profil, destinataire, abonnements}
 action_mail_eleveur.py      lire_mail_eleveur(d, cheptel) -> adresse « e-mail » de la fiche éleveur (lecture seule)
 genicia_auto.py             boîte à outils (voir ci-dessous)
+file_attente_genicia.py     (18/11/2026) `with tour_genicia(desc):` autour de TOUT pilotage de GENICIA++ (main.py,
+                              executer_ordres.py). Verrou %LOCALAPPDATA%\GENICIA\execution.lock + tickets FIFO
+                              file_attente\<time_ns>_<pid>.ticket (ticket verrouillé = programme vivant). Attente max
+                              1 h (GeniciaOccupe). Marqueurs ⏳/▶️ lus par le veilleur : le délai max repart au tour.
+                              Tout nouveau script qui pilote GENICIA++ DOIT passer par tour_genicia.
 --- chaîne mail (ajoutée le 11/11/2026, voir §10) ---
 ordres_genicia.py           CATALOGUE des actions par mail (référence unique), lire_reponse, valider, valider_ordre
 executer_ordres.py          exécute un JSON contrôlé dans GENICIA++ (ACTIONS : nom JSON -> fonction), résultats par ordre

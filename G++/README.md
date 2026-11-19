@@ -164,6 +164,13 @@ Pour chaque `pending/<nom>.json` :
 | Incertitude ou information manquante | `REFUSE_VALIDATION` | `error/` | … Précisions nécessaires / Demande non traitée |
 | PC ou veilleur arrêté pendant l'exécution | `INTERROMPU` | `error/` | … Traitement interrompu, à vérifier dans GENICIA++ (jamais relancé) |
 
+**File d'attente GENICIA++** ([file_attente_genicia.py](file_attente_genicia.py)) : un seul programme pilote GENICIA++
+à la fois sur un PC (veilleur, `main.py`, `executer_ordres.py`). Si GENICIA++ est déjà utilisé par un autre programme,
+le nouveau **attend son tour**, dans l'ordre d'arrivée (ligne « ⏳ GENICIA++ occupé… » chaque minute, notification
+« demande en attente » pour un mail). Le temps d'attente ne compte pas dans le délai maximal du veilleur. Au-delà
+d'une heure d'attente, la demande est abandonnée sans rien faire (réponse en erreur, à relancer). Un programme arrêté
+ou planté libère sa place tout seul.
+
 > ⚠ **Le PC doit être allumé, la session Windows ouverte et déverrouillée**, OneDrive synchronisé et le veilleur lancé.
 > GENICIA++ est piloté par de vrais clics de souris : pendant un traitement (notification « traitement en cours »),
 > ne touchez ni au clavier ni à la souris. Un seul mail est traité à la fois.
@@ -223,6 +230,7 @@ Ce veilleur est indépendant de celui d'EGESYS (autres dossiers OneDrive, autre 
 | `action_espace_adherent.py` | Les étapes de l'action « espace » |
 | `action_mail_eleveur.py` | Lit (sans rien modifier) l'adresse mail de la fiche d'un éleveur, pour lui envoyer ses factures |
 | `genicia_auto.py` | La boîte à outils : lancer, se connecter, cliquer, écrire, lire les listes, gérer les fenêtres |
+| `file_attente_genicia.py` | Un seul programme à la fois dans GENICIA++ ; les autres attendent leur tour (ordre d'arrivée) |
 | `enregistrer_identifiants.py` | Enregistre vos identifiants dans Windows |
 | `inspecter_ecran.py` | Liste les éléments de l'écran ouvert dans GENICIA++ (dans `arbre_interface.txt`). Sert à préparer une nouvelle action. |
 | `lecture_bdd.py` | Lecture directe de la base de données (requêtes `SELECT` uniquement) |

@@ -21,6 +21,7 @@ from pathlib import Path
 import genicia_auto as g
 from action_espace_adherent import generer_espace_adherent
 from action_facture import telecharger_facture
+from file_attente_genicia import GeniciaOccupe, tour_genicia
 
 sys.stdout.reconfigure(encoding="utf-8")
 DOSSIER_FACTURES = Path(__file__).with_name("factures")
@@ -42,6 +43,15 @@ def main():
 
     a = ap.parse_args()
 
+    # Un seul programme pilote GENICIA++ à la fois (veilleur compris) : sinon on attend son tour
+    try:
+        with tour_genicia(f"main.py {a.action} {a.cheptel}"):
+            executer(a)
+    except GeniciaOccupe as erreur:
+        sys.exit(f"🛑 {erreur}")
+
+
+def executer(a):
     print("Lancement et connexion à GENICIA++...")
     d = g.lancer_et_connecter()
     g.quitter_ecran(d)                                   # part toujours de l'accueil

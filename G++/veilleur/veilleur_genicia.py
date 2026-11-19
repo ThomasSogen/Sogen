@@ -48,6 +48,7 @@ from ordres_genicia import (JsonIllisible, factures_max_estimees, lire_champ_bru
                             texte_validation, valider)
 from compte_rendu import mail_client, rediger                                                    # noqa: E402
 from config_genicia import DRIVE, FLUX                                                           # noqa: E402
+from file_attente_genicia import MARQUEUR_ATTENTE, MARQUEUR_TOUR                                 # noqa: E402
 from poste_actif import POSTE, PosteActif                                                        # noqa: E402
 
 PENDING, PROCESSING, COMPLETED, ERROR, RESULT = (DRIVE / n for n in
@@ -160,21 +161,27 @@ def executer(valide, travail, ordres):
     environnement = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     p = subprocess.Popen(commande, cwd=DOSSIER_PROJET, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                          encoding="utf-8", errors="replace", env=environnement, creationflags=SANS_FENETRE)
-    lignes, derniere_activite = [], [time.time()]
+    lignes, derniere_activite, debut = [], [time.time()], [time.time()]
 
     def lire_sortie():           # chaque ligne affichée par executer_ordres.py = signe de vie
         for ligne in p.stdout:
             lignes.append(ligne)
             derniere_activite[0] = time.time()
+            # File d'attente GENICIA++ (file_attente_genicia.py) : le délai maximal ne compte qu'à partir du tour
+            if MARQUEUR_ATTENTE in ligne or MARQUEUR_TOUR in ligne:
+                if MARQUEUR_ATTENTE in ligne and not any(MARQUEUR_ATTENTE in l for l in lignes[:-1]):
+                    notifier("GENICIA++ : demande en attente",
+                             "GENICIA++ est occupé par un autre traitement ; ce mail passera ensuite.")
+                debut[0] = time.time()
 
     lecteur = threading.Thread(target=lire_sortie, daemon=True)
     lecteur.start()
-    debut, arret = time.time(), ""
+    arret = ""
     while p.poll() is None:
         if time.time() - derniere_activite[0] > INACTIVITE_MAX:
             arret = (f"🛑 Aucune activité depuis {INACTIVITE_MAX // 60} min : GENICIA++ semble figé, "
                      "programme arrêté.")
-        elif time.time() - debut > duree_max:
+        elif time.time() - debut[0] > duree_max:
             arret = "🛑 Délai d'exécution dépassé : programme arrêté."
         if arret:
             p.kill()
