@@ -436,7 +436,7 @@ Supprimer une note existante, identifiée par son sujet (et sa date si connue). 
 
 ### `telecharger_facture_client`
 
-Enregistrer le duplicata PDF d'UNE facture validée du client (aucune modification dans EGESYS). Sans critère de facture : la plus récente. Champs obligatoires : client uniquement (`nom_client` ou `code_client`).
+Enregistrer le duplicata PDF d'UNE facture validée du client (aucune modification dans EGESYS). Sans critère de facture : la plus récente. Jour inconnu : la période dans "date_realisation" ; plusieurs factures dans la période : toutes sont envoyées, avec un message qui le signale. Champs obligatoires : client uniquement (`nom_client` ou `code_client`).
 
 ```json
 {
@@ -511,7 +511,7 @@ Enregistrer le duplicata PDF de PLUSIEURS factures validées du client : toutes 
 | `sujet` | note | Sujet de la note (nouveau sujet en cas de modification). | texte libre |
 | `sujet_cible` | note_cible | Sujet de la note existante visée. | texte libre |
 | `date_etat` | facture | Date d'état (validation) de la facture JJ/MM/AAAA, même approximative. | texte libre |
-| `date_realisation` | facture | Date de réalisation (date) de la facture JJ/MM/AAAA, même approximative. | texte libre |
+| `date_realisation` | facture | Date de réalisation (date) de la facture JJ/MM/AAAA, même approximative. Si le mail ne donne pas le jour : la période, JJ/MM/AAAA au JJ/MM/AAAA (ex : « sa facture de mars 2026 » → "01/03/2026 au 31/03/2026"). | texte libre |
 | `montant` | facture | Montant TTC de la facture (ex : 652,49), même approximatif. | texte libre |
 | `numero_facture` | facture | Numéro de facture complet (13 chiffres, ex : 4500000012345) s'il est cité, sinon vide. | texte libre |
 | `nombre_dernieres` | factures | Nombre des dernières factures demandées, en chiffres (« ses 3 dernières factures » → "3"), sinon vide. Seules les plus récentes sont prises (parmi les dates de "periodes" si elles sont données, sinon parmi toutes les factures du client). | texte libre |
@@ -703,6 +703,42 @@ Points d'attention :
         "date_etat": "",
         "date_realisation": "01/03/2026",
         "montant": "120,00",
+        "numero_facture": ""
+      }
+    }
+  ],
+  "incertitudes": []
+}
+```
+
+## Exemple 4 bis : une facture sans le jour (seulement le mois)
+
+ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX08`
+Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
+
+Mail reçu :
+
+> Bonjour, le client 1234567 voudrait sa facture de février 2026, il n'a pas la date exacte. Merci.
+
+Points d'attention :
+- UNE facture demandée, sans le jour : la période du mois dans "date_realisation".
+- Ce n'est pas une incertitude : s'il y a plusieurs factures en février, le programme les envoie toutes.
+
+```json
+{
+  "resume": "Duplicata de la facture de février 2026 du client 1234567.",
+  "id_message": "AAMkXXXXXXXXXXXX08",
+  "expediteur": "gestionnaire@exemple.fr",
+  "ordres": [
+    {
+      "action": "telecharger_facture_client",
+      "justification": "le client 1234567 voudrait sa facture de février 2026",
+      "code_client": "1234567",
+      "nom_client": "",
+      "facture": {
+        "date_etat": "",
+        "date_realisation": "01/02/2026 au 28/02/2026",
+        "montant": "",
         "numero_facture": ""
       }
     }

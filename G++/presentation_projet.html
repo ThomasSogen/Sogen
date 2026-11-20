@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automatisation GENICIA++</title>
+<style>
+:root {
+  --fond: #f6f7f9; --carte: #ffffff; --texte: #1d2433; --doux: #5b6476; --trait: #e2e6ec;
+  --bleu: #0b5394; --bleu-fond: #e8f0fe; --vert: #1e7e34; --vert-fond: #e8f5e9;
+  --orange: #9a5b00; --orange-fond: #fff6e0; --rouge: #b3261e; --rouge-fond: #fdecea;
+  --violet: #6a3fb5; --violet-fond: #f1ebfb; --code: #f0f2f5;
+  --ombre: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fond: #12151b; --carte: #1b2029; --texte: #e6e9ef; --doux: #9aa3b5; --trait: #2c3340;
+    --bleu: #7fb0f0; --bleu-fond: #18263a; --vert: #6fcf8a; --vert-fond: #16281d;
+    --orange: #f0b45a; --orange-fond: #2e2410; --rouge: #f08a82; --rouge-fond: #331a19;
+    --violet: #b79cf0; --violet-fond: #251d36; --code: #242a35; --ombre: none;
+  }
+}
+:root[data-theme="dark"] {
+  --fond: #12151b; --carte: #1b2029; --texte: #e6e9ef; --doux: #9aa3b5; --trait: #2c3340;
+  --bleu: #7fb0f0; --bleu-fond: #18263a; --vert: #6fcf8a; --vert-fond: #16281d;
+  --orange: #f0b45a; --orange-fond: #2e2410; --rouge: #f08a82; --rouge-fond: #331a19;
+  --violet: #b79cf0; --violet-fond: #251d36; --code: #242a35; --ombre: none;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 70px; }
+body { margin: 0; background: var(--fond); color: var(--texte);
+  font: 15px/1.6 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; }
+code { background: var(--code); padding: 1px 6px; border-radius: 4px; font: 13px Consolas, "Cascadia Mono", monospace; word-break: break-word; }
+a { color: var(--bleu); }
+h1, h2, h3 { line-height: 1.25; margin: 0; }
+
+/* Navigation */
+nav { position: sticky; top: 0; z-index: 10; background: var(--carte); border-bottom: 1px solid var(--trait); }
+nav .interieur { max-width: 1100px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; overflow-x: auto; align-items: center; }
+nav .marque { font-weight: 700; color: var(--bleu); margin-right: 12px; white-space: nowrap; padding: 14px 0; }
+nav a { color: var(--doux); text-decoration: none; padding: 14px 7px; white-space: nowrap; font-size: 13.5px; border-bottom: 2px solid transparent; }
+nav a:hover, nav a.actif { color: var(--texte); border-bottom-color: var(--bleu); }
+
+main { max-width: 1100px; margin: 0 auto; padding: 0 16px 60px; }
+section { margin-top: 56px; }
+section > h2 { font-size: 24px; margin-bottom: 6px; }
+section > .chapeau { color: var(--doux); margin: 0 0 20px; max-width: 760px; }
+
+/* En-tête */
+.entete { padding: 48px 0 8px; }
+.entete .surtitre { color: var(--bleu); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 13px; }
+.entete h1 { font-size: 34px; margin: 6px 0 12px; }
+.entete p { font-size: 17px; color: var(--doux); max-width: 780px; margin: 0; }
+.chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 12px; margin-top: 28px; }
+.chiffre { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; padding: 16px; box-shadow: var(--ombre); }
+.chiffre b { display: block; font-size: 28px; color: var(--bleu); line-height: 1.1; }
+.chiffre span { color: var(--doux); font-size: 13px; }
+
+/* Circuit */
+.circuit { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(128px, 100%), 1fr)); gap: 10px; row-gap: 18px; counter-reset: etape; }
+.maillon { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; padding: 14px; position: relative; box-shadow: var(--ombre); }
+.maillon::before { counter-increment: etape; content: counter(etape); position: absolute; top: -10px; left: 12px;
+  background: var(--bleu); color: var(--carte); width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+.maillon .ou { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; margin-top: 4px; }
+.maillon h3 { font-size: 15px; margin: 4px 0; }
+.maillon p { margin: 0; font-size: 13px; color: var(--doux); }
+.ou.ms { color: var(--violet); } .ou.pc { color: var(--bleu); } .ou.eg { color: var(--vert); }
+.legende { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--doux); margin-top: 12px; }
+.legende i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+/* Étapes détaillées */
+.etape { display: grid; grid-template-columns: 44px 1fr; gap: 16px; margin-bottom: 18px; }
+.etape .num { width: 44px; height: 44px; border-radius: 50%; background: var(--bleu-fond); color: var(--bleu); font-weight: 700;
+  display: flex; align-items: center; justify-content: center; font-size: 17px; }
+.etape .corps { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; padding: 16px 18px; box-shadow: var(--ombre); }
+.etape h3 { font-size: 17px; margin-bottom: 4px; }
+.etape .qui { font-size: 12px; color: var(--doux); margin-bottom: 8px; }
+.etape ul { margin: 6px 0 0; padding-left: 20px; }
+.etape li { margin: 3px 0; }
+
+/* Cartes et tableaux */
+.grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+.carte { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; padding: 16px 18px; box-shadow: var(--ombre); }
+.carte h3 { font-size: 16px; margin-bottom: 8px; }
+.tableau { width: 100%; border-collapse: collapse; background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; overflow: hidden; font-size: 14px; }
+.tableau th { text-align: left; background: var(--code); color: var(--doux); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+.tableau th, .tableau td { padding: 9px 12px; border-bottom: 1px solid var(--trait); vertical-align: top; }
+.tableau tr:last-child td { border-bottom: 0; }
+.defile { overflow-x: auto; border-radius: 10px; }
+.pastille { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.p-vert { background: var(--vert-fond); color: var(--vert); } .p-orange { background: var(--orange-fond); color: var(--orange); }
+.p-rouge { background: var(--rouge-fond); color: var(--rouge); } .p-bleu { background: var(--bleu-fond); color: var(--bleu); }
+.p-violet { background: var(--violet-fond); color: var(--violet); }
+.encadre { border-left: 4px solid var(--bleu); background: var(--bleu-fond); padding: 12px 16px; border-radius: 6px; margin: 14px 0; }
+.encadre.orange { border-color: var(--orange); background: var(--orange-fond); }
+.encadre.rouge { border-color: var(--rouge); background: var(--rouge-fond); }
+.encadre.vert { border-color: var(--vert); background: var(--vert-fond); }
+.liste-actions { list-style: none; padding: 0; margin: 0; }
+.liste-actions li { padding: 6px 0; border-bottom: 1px dashed var(--trait); }
+.liste-actions li:last-child { border-bottom: 0; }
+.liste-actions code { font-size: 12px; }
+.liste-actions .desc { display: block; color: var(--doux); font-size: 13px; }
+
+/* Fichiers */
+details { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; margin-bottom: 10px; box-shadow: var(--ombre); }
+summary { cursor: pointer; padding: 14px 18px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; color: var(--doux); font-weight: 400; }
+details[open] summary::after { content: "–"; }
+summary .compte { color: var(--doux); font-weight: 400; font-size: 13px; margin-left: auto; margin-right: 8px; }
+details .contenu { padding: 0 18px 14px; }
+.fichier { display: grid; grid-template-columns: minmax(180px, 280px) 1fr; gap: 12px; padding: 9px 0; border-top: 1px solid var(--trait); }
+.fichier .nom code { font-weight: 600; }
+.fichier p { margin: 0; font-size: 14px; }
+.fichier .usage { color: var(--doux); font-size: 13px; margin-top: 2px; }
+
+/* Exemples */
+.exemple { background: var(--carte); border: 1px solid var(--trait); border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: var(--ombre); }
+.exemple > h3 { font-size: 17px; margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ex-ligne { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.ex-bloc { border-radius: 8px; padding: 12px 14px; background: var(--fond); border: 1px solid var(--trait); font-size: 14px; }
+.ex-bloc .titre-bloc { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--doux); margin-bottom: 6px; }
+.ex-bloc blockquote { margin: 0; font-style: italic; }
+.ex-bloc ol, .ex-bloc ul { margin: 0; padding-left: 18px; }
+.ex-bloc li { margin: 2px 0; }
+.mail { border: 1px solid var(--trait); border-radius: 10px; background: var(--carte); overflow: hidden; box-shadow: var(--ombre); }
+.mail .entete-mail { background: var(--code); padding: 10px 14px; font-size: 13px; color: var(--doux); border-bottom: 1px solid var(--trait); }
+.mail .entete-mail b { color: var(--texte); }
+.mail .corps-mail { padding: 14px 16px; font-size: 14px; }
+.mail .corps-mail p { margin: 0 0 8px; }
+.bandeau { border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+@media (max-width: 860px) { .ex-ligne { grid-template-columns: 1fr; } }
+
+pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; font: 13px/1.5 Consolas, "Cascadia Mono", monospace; margin: 8px 0; }
+footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 16px; border-top: 1px solid var(--trait); }
+
+@media (max-width: 640px) {
+  .entete h1 { font-size: 26px; }
+  .etape { grid-template-columns: 1fr; }
+  .etape .num { display: none; }
+  .fichier { grid-template-columns: 1fr; gap: 2px; }
+}
+</style>
+<style>
+/* Parcours dans le logiciel */
+.parcours { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 4px; }
+.parcours span { background: var(--bleu-fond); color: var(--bleu); padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.parcours span.ecrit { background: var(--orange-fond); color: var(--orange); }
+.parcours i { color: var(--doux); font-style: normal; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="interieur">
+    <span class="marque">GENICIA++ auto</span>
+    <a href="#circuit">Circuit</a>
+    <a href="#exemples">Exemples</a>
+    <a href="#etapes">Étapes</a>
+    <a href="#actions">Actions</a>
+    <a href="#fiabilite">Fiabilité</a>
+    <a href="#incertitudes">Incertitudes</a>
+    <a href="#erreurs">Erreurs</a>
+    <a href="#resultats">Résultats</a>
+    <a href="#securite">Sécurité</a>
+    <a href="#bilan">Bilan</a>
+    <a href="#fichiers">Fichiers</a>
+    <a href="#exploitation">Exploitation</a>
+    <a href="../EGESYS/presentation_projet.html" style="margin-left:auto">Projet EGESYS →</a>
+  </div>
+</nav>
+
+<main>
+
+<header class="entete">
+  <div class="surtitre">SOGEN · Projet d'automatisation</div>
+  <h1>Du mail à GENICIA++, sans personne devant l'écran</h1>
+  <p>Un éleveur demande le duplicata de ses factures ou l'accès à son espace adhérent ? Le mail est transféré, un agent
+  Copilot le traduit en ordres précis, et un programme sur le PC utilise GENICIA++ <b>comme le ferait un employé</b> :
+  il ouvre le logiciel, se connecte, clique, enregistre les PDF, puis le referme. Le demandeur reçoit un compte rendu,
+  l'éleveur reçoit ses factures. Dans le doute, rien n'est fait : la réponse explique ce qu'il faut préciser.</p>
+  <div class="chiffres">
+    <div class="chiffre"><b>3</b><span>actions par mail, + 2 automatiques</span></div>
+    <div class="chiffre"><b>0</b><span>clic humain : du mail reçu à la réponse</span></div>
+    <div class="chiffre"><b>30</b><span>factures au plus par demande</span></div>
+    <div class="chiffre"><b>40</b><span>mails de test, couvrant tous les cas</span></div>
+    <div class="chiffre"><b>1 min</b><span>sans réaction : arrêt propre et réponse en erreur</span></div>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<section id="circuit">
+  <h2>Le circuit en un coup d'œil</h2>
+  <p class="chapeau">Le même circuit que pour EGESYS : Microsoft 365 reçoit et répond, le PC fait le travail. La
+  différence : GENICIA++ est un logiciel installé sur le PC, sans accès web. Le programme le pilote donc à l'écran,
+  avec de vrais clics de souris.</p>
+  <div class="circuit">
+    <div class="maillon"><div class="ou ms">Microsoft 365</div><h3>Mail reçu</h3><p>Objet contenant « G++ » : Power Automate le transmet à l'agent.</p></div>
+    <div class="maillon"><div class="ou ms">Microsoft 365</div><h3>Agent Copilot</h3><p>Traduit la demande en ordres JSON et note ses doutes.</p></div>
+    <div class="maillon"><div class="ou ms">OneDrive</div><h3>pending/</h3><p>Le JSON est déposé dans le Drive G++.</p></div>
+    <div class="maillon"><div class="ou pc">PC · veilleur</div><h3>Contrôle</h3><p>Cheptel, dates, nombre, profil : tout est vérifié avant d'ouvrir le logiciel.</p></div>
+    <div class="maillon"><div class="ou eg">GENICIA++</div><h3>Exécution</h3><p>Lancement, connexion, clics écran par écran, PDF, fermeture.</p></div>
+    <div class="maillon"><div class="ou ms">OneDrive</div><h3>completed/ · error/</h3><p>Dossier complet : JSON, rapport détaillé, PDF.</p></div>
+    <div class="maillon"><div class="ou ms">OneDrive → Outlook</div><h3>Réponses</h3><p>Compte rendu au demandeur, factures à l'éleveur.</p></div>
+  </div>
+  <div class="legende">
+    <span><i style="background:var(--violet)"></i>Microsoft 365 (cloud)</span>
+    <span><i style="background:var(--bleu)"></i>PC SOGEN (Python)</span>
+    <span><i style="background:var(--vert)"></i>Logiciel GENICIA++ (Java, piloté à l'écran)</span>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="exemples">
+  <h2>Exemples concrets</h2>
+  <p class="chapeau">Cinq mails tirés des tests, tous sur l'éleveur de test (cheptel 64233008) : ce qui arrive, ce que
+  fait le programme, et ce que reçoivent le demandeur et l'éleveur.</p>
+
+  <div class="exemple">
+    <h3><span class="pastille p-vert">EXECUTE</span> Un duplicata de facture</h3>
+    <div class="ex-ligne">
+      <div class="ex-bloc"><div class="titre-bloc">Mail reçu</div>
+        <blockquote>« Bonjour, l'éleveur FR 64 233 008 me demande un duplicata de sa facture du 31 mars 2019. Merci. »</blockquote></div>
+      <div class="ex-bloc"><div class="titre-bloc">Ce que fait le programme</div>
+        <ol><li>L'agent recopie le cheptel (64233008) et la date (31/03/2019).</li>
+        <li>GENICIA++ : Bilan éleveur, analyse, facture du 31/03/2019, duplicata enregistré en PDF.</li>
+        <li>Le n° de facture est contrôlé avant l'enregistrement.</li>
+        <li>L'adresse mail de l'éleveur est lue sur l'écran du bilan.</li>
+        <li>Espace adhérent vérifié (déjà ouvert : rien n'est modifié).</li></ol></div>
+      <div class="ex-bloc"><div class="titre-bloc">Réponses</div>
+        <b>Au demandeur</b> : « GENICIA++ : Demande traitée », PDF joint.<br>
+        <b>À l'éleveur</b> : « SOGEN : duplicata de votre facture du 31/03/2019 », PDF joint.</div>
+    </div>
+  </div>
+
+  <div class="exemple">
+    <h3><span class="pastille p-vert">EXECUTE</span> « Ses 3 dernières factures »</h3>
+    <div class="ex-ligne">
+      <div class="ex-bloc"><div class="titre-bloc">Mail reçu</div>
+        <blockquote>« Bonjour, le cheptel 64233008 souhaite recevoir ses 3 dernières factures. »</blockquote></div>
+      <div class="ex-bloc"><div class="titre-bloc">Ce que fait le programme</div>
+        <ol><li>L'agent note « 3 dernières », sans date.</li>
+        <li>GENICIA++ : tout l'historique du bilan est lu, les 3 plus récentes sont gardées.</li>
+        <li>Chaque facture est ouverte, contrôlée, enregistrée, puis retour à la liste pour la suivante.</li></ol></div>
+      <div class="ex-bloc"><div class="titre-bloc">Réponses</div>
+        3 PDF : 31/03/2019, 31/01/2019, 30/09/2018.<br>
+        S'il en avait demandé 20 alors qu'il n'en a que 13 : les 13 sont envoyées et le mail le dit simplement.</div>
+    </div>
+  </div>
+
+  <div class="exemple">
+    <h3><span class="pastille p-vert">EXECUTE</span> Un éleveur désigné par son seul nom</h3>
+    <div class="ex-ligne">
+      <div class="ex-bloc"><div class="titre-bloc">Mail reçu</div>
+        <blockquote>« Bonjour, l'EARL XXXX nous demande un duplicata de sa facture du 31 mars 2019. Merci. »</blockquote></div>
+      <div class="ex-bloc"><div class="titre-bloc">Ce que fait le programme</div>
+        <ol><li>Pas de cheptel : l'agent transmet le nom, sans le considérer comme un doute.</li>
+        <li>GENICIA++ : recherche par « Nom : » (sans « EARL »), après avoir effacé le cheptel prérempli.</li>
+        <li>Un seul éleveur trouvé → son cheptel est utilisé pour la suite.</li></ol></div>
+      <div class="ex-bloc"><div class="titre-bloc">Réponses</div>
+        Facture envoyée comme d'habitude.<br>
+        Plusieurs éleveurs ou aucun : <b>rien n'est fait</b>, la réponse liste les éleveurs possibles et demande le n° de cheptel.</div>
+    </div>
+  </div>
+
+  <div class="exemple">
+    <h3><span class="pastille p-vert">EXECUTE</span> Plusieurs dates, dont une sans facture</h3>
+    <div class="ex-ligne">
+      <div class="ex-bloc"><div class="titre-bloc">Mail reçu</div>
+        <blockquote>« Merci d'envoyer à l'éleveur 64233008 sa facture du 31/03/2019 et celle du 25/03/2019. »</blockquote></div>
+      <div class="ex-bloc"><div class="titre-bloc">Ce que fait le programme</div>
+        <ol><li>Un seul ordre avec les deux dates.</li>
+        <li>31/03/2019 : facture trouvée et enregistrée.</li>
+        <li>25/03/2019 : aucune facture, <b>sans arrêter le reste</b> ; la plus proche est notée.</li></ol></div>
+      <div class="ex-bloc"><div class="titre-bloc">Réponses</div>
+        <b>GENICIA++ : Demande traitée, factures manquantes</b> : 25/03 « Non trouvée », plus proche : 31/03/2019.<br>
+        L'éleveur reçoit sa facture et la phrase « Nous n'avons trouvé aucune facture le 25/03/2019 ».</div>
+    </div>
+  </div>
+
+  <div class="exemple">
+    <h3><span class="pastille p-orange">REFUSE_VALIDATION</span> Un mail piégé</h3>
+    <div class="ex-ligne">
+      <div class="ex-bloc"><div class="titre-bloc">Mail reçu</div>
+        <blockquote>Un mail qui contient des consignes cachées destinées à détourner l'agent.</blockquote></div>
+      <div class="ex-bloc"><div class="titre-bloc">Ce que fait le programme</div>
+        <ol><li>L'agent ne suit pas ces consignes : aucun ordre, une incertitude.</li>
+        <li>GENICIA++ n'est même pas ouvert.</li></ol></div>
+      <div class="ex-bloc"><div class="titre-bloc">Réponse au demandeur</div>
+        <b>GENICIA++ : Précisions nécessaires</b>, avec le point à vérifier.</div>
+    </div>
+  </div>
+
+  <h3 style="margin:26px 0 10px">Le mail reçu par l'éleveur <span style="font-weight:400;color:var(--doux);font-size:14px">(illustration simplifiée)</span></h3>
+  <div class="mail">
+    <div class="entete-mail"><b>À :</b> adresse de l'éleveur lue dans GENICIA++ — <b>Objet :</b> SOGEN : duplicatas de vos factures<br>
+      <b>Pièces jointes :</b> 3 duplicatas PDF</div>
+    <div class="corps-mail">
+      <p>Bonjour,</p>
+      <p>Vous nous avez demandé les duplicatas de vos factures (les 3 dernières factures, cheptel n° 64233008).
+      Vous trouverez les 3 factures correspondantes en pièces jointes de ce mail :</p>
+      <ul style="margin:0 0 8px;padding-left:20px">
+        <li>Facture n° 00200000XXXXX du 31/03/2019</li>
+        <li>Facture n° 00200000XXXXX du 31/01/2019</li>
+        <li>Facture n° 00200000XXXXX du 30/09/2018</li>
+      </ul>
+      <p>Cordialement,<br>Le service administratif de SOGEN</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="etapes">
+  <h2>Les étapes en détail</h2>
+  <p class="chapeau">Ce qui se passe, dans l'ordre, pour chaque mail.</p>
+
+  <div class="etape"><div class="num">1</div><div class="corps">
+    <h3>Réception du mail et appel de l'agent</h3>
+    <div class="qui">Power Automate (flux n°1) · Outlook</div>
+    Seuls les mails dont l'<b>objet contient « G++ »</b> sont pris (ceux d'EGESYS contiennent « EGESYS »). Power Automate
+    envoie le contenu à l'agent avec deux lignes techniques : <code>ID du message</code> (pour répondre au bon mail) et
+    <code>Expéditeur</code>.
+  </div></div>
+
+  <div class="etape"><div class="num">2</div><div class="corps">
+    <h3>Traduction en ordres par l'agent Copilot</h3>
+    <div class="qui">Agent Copilot · <code>copilot/instructions.md</code> + compétence <code>genicia-modeles-json</code></div>
+    L'agent répond uniquement par un JSON : <code>resume</code>, <code>id_message</code>, <code>expediteur</code>,
+    <code>ordres</code>, <code>incertitudes</code>. Il recopie le cheptel (« FR 64 233 008 » → 64233008 ; « code client »
+    et « numéro d'élevage » veulent dire la même chose) ou, à défaut, le nom de l'éleveur ; il traduit les dates
+    (« le 1er trimestre 2019 », « ses 3 dernières factures »). Il n'exécute jamais rien lui-même.
+  </div></div>
+
+  <div class="etape"><div class="num">3</div><div class="corps">
+    <h3>Dépôt dans OneDrive</h3>
+    <div class="qui">Power Automate → <code>OneDrive - Sogen\G++\pending\</code></div>
+    Le JSON est enregistré dans <code>pending/</code>. OneDrive le synchronise sur le PC qui fait tourner le veilleur.
+  </div></div>
+
+  <div class="etape"><div class="num">4</div><div class="corps">
+    <h3>Contrôle, sans ouvrir GENICIA++</h3>
+    <div class="qui">PC · <code>veilleur/veilleur_genicia.py</code> + <code>ordres_genicia.py</code></div>
+    Le veilleur regarde <code>pending/</code> toutes les 5 secondes. Pour chaque JSON :
+    <ul>
+      <li>clés exactes, action connue, cheptel à 8 caractères ou nom de l'éleveur ;</li>
+      <li>dates valides et pas dans le futur, nombre de dernières factures entre 1 et 30, profil web autorisé ;</li>
+      <li>s'il reste une incertitude ou une erreur, <b>rien n'est exécuté</b> : le dossier part dans <code>error/</code>.</li>
+    </ul>
+  </div></div>
+
+  <div class="etape"><div class="num">5</div><div class="corps">
+    <h3>Attente de son tour, lancement et connexion</h3>
+    <div class="qui">PC · <code>file_attente_genicia.py</code> + <code>genicia_auto.py</code></div>
+    Un seul programme pilote GENICIA++ à la fois : les autres attendent leur tour, dans l'ordre d'arrivée (1 h au plus).
+    Le programme lance ensuite GENICIA++ et se connecte avec les identifiants rangés dans le Gestionnaire d'identifiants
+    Windows. Si une ancienne instance est restée bloquée, elle est arrêtée et le logiciel relancé une fois.
+  </div></div>
+
+  <div class="etape"><div class="num">6</div><div class="corps">
+    <h3>Exécution dans GENICIA++</h3>
+    <div class="qui">PC → GENICIA++ · <code>executer_ordres.py</code>, <code>action_facture.py</code>, <code>action_espace_adherent.py</code></div>
+    Le programme suit exactement le parcours qu'un employé ferait. Par exemple, pour un duplicata :
+    <div class="parcours">
+      <span>Administratif</span><i>›</i><span>Bilan Eleveur</span><i>›</i><span>N° Cheptel ou Nom</span><i>›</i><span>Rechercher</span><i>›</i>
+      <span>Début</span><i>›</i><span>VALIDER</span><i>›</i><span>la facture</span><i>›</i><span>F5 DETAILLER</span><i>›</i>
+      <span>F5 DUPLICATA</span><i>›</i><span>Aperçu</span><i>›</i><span>Enregistrer en PDF</span>
+    </div>
+    <ul>
+      <li>il vérifie le n° de chaque facture avant de l'enregistrer, et annule l'impression : rien n'est imprimé ;</li>
+      <li>il lit l'adresse mail de l'éleveur sur l'écran du bilan (« Coordonnées : … Email : … ») ;</li>
+      <li>il vérifie que l'éleveur a un espace adhérent web, et le crée sinon ;</li>
+      <li>il revient à l'accueil entre deux demandes, et <b>ferme GENICIA++</b> à la fin.</li>
+    </ul>
+  </div></div>
+
+  <div class="etape"><div class="num">7</div><div class="corps">
+    <h3>Rangement et rapport</h3>
+    <div class="qui">PC → <code>completed/</code> ou <code>error/</code></div>
+    Tout est rangé ensemble : la réponse de l'agent, les ordres contrôlés, le <b>rapport détaillé</b>
+    (<code>_rapport.txt</code> : chaque bouton cherché ou cliqué, chaque champ rempli, chaque valeur lue, avec l'heure ;
+    mots de passe masqués), le résultat technique et les PDF.
+  </div></div>
+
+  <div class="etape"><div class="num">8</div><div class="corps">
+    <h3>Réponses</h3>
+    <div class="qui">PC → <code>result/</code> → Power Automate (flux n°2) → Outlook · <code>veilleur/compte_rendu.py</code></div>
+    Le veilleur écrit <code>result/&lt;nom&gt;.json</code> en tout dernier :
+<pre>{
+  "id_message": "AAMk…",
+  "expediteur": "prenom.nom@exemple.fr",
+  "objet": "GENICIA++ : Demande traitée",
+  "corps": "&lt;div …&gt; compte rendu HTML &lt;/div&gt;",
+  "pdf": ["&lt;nom&gt;_64233008_00200000XXXXX_2019-03-31.pdf"],
+  "client": {"mail": "…", "objet": "SOGEN : …", "corps": "…"}
+}</pre>
+    Power Automate répond au mail d'origine avec les PDF, puis, si <code>client.mail</code> n'est pas vide, envoie un
+    second mail à l'éleveur avec les mêmes PDF.
+  </div></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="actions">
+  <h2>Les actions prises en charge</h2>
+  <p class="chapeau">L'éleveur est désigné par son n° de cheptel ou, à défaut, par son nom.</p>
+  <div class="grille">
+    <div class="carte">
+      <h3><span class="pastille p-vert">lecture</span> Une facture</h3>
+      <ul class="liste-actions">
+        <li><code>telecharger_facture</code><span class="desc">Duplicata PDF de la facture d'une date précise, ou d'une période si le jour n'est pas connu (« sa facture de mars ») : plusieurs factures trouvées → toutes envoyées, et la réponse le signale. Aucune facture : la réponse propose les plus proches.</span></li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-vert">lecture</span> Plusieurs factures</h3>
+      <ul class="liste-actions">
+        <li><code>telecharger_factures</code><span class="desc">Plusieurs dates et/ou périodes (« la facture du 31/01 et toutes celles de mars », « l'année 2018 »), ou les <b>N dernières</b> (« sa dernière facture », « ses 3 dernières »). 30 au maximum. Une date sans facture n'arrête rien.</span></li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-orange">écriture</span> Espace adhérent web</h3>
+      <ul class="liste-actions">
+        <li><code>generer_espace_adherent</code><span class="desc">Donne les droits web (profil ELWEB1 STANDARD par défaut), génère un mot de passe jamais affiché, et GENICIA++ envoie les identifiants à l'adresse de la fiche. L'abonne aussi aux factures par mail (sans pièce jointe).</span></li>
+      </ul>
+      <div class="parcours" style="margin-top:8px">
+        <span>Administratif</span><i>›</i><span>Eleveur</span><i>›</i><span>F14 COMMUNIC.</span><i>›</i><span class="ecrit">Droits = Oui</span><i>›</i><span class="ecrit">Profil</span><i>›</i><span class="ecrit">ENREGISTRER DROITS</span><i>›</i><span class="ecrit">envoi du mail</span>
+      </div>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-bleu">auto</span> Après chaque facture</h3>
+      <ul class="liste-actions">
+        <li><b>Mail à l'éleveur</b><span class="desc">Ses factures lui sont envoyées à l'adresse lue dans GENICIA++, jamais à une adresse tirée du mail reçu.</span></li>
+        <li><b>Espace adhérent vérifié</b><span class="desc">« Droits : Oui » → rien n'est modifié ; « Non » → l'espace est créé et l'éleveur prévenu. Un échec n'empêche pas l'envoi des factures.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="fiabilite">
+  <h2>Un logiciel piloté sans blocage</h2>
+  <p class="chapeau">GENICIA++ n'a pas été conçu pour être piloté par un programme. Les premiers essais le figeaient
+  parfois. Chaque blocage rencontré a été analysé et corrigé ; depuis le 20/11/2026, les tests passent sans blocage.</p>
+  <div class="grille">
+    <div class="carte"><h3>Rythme d'un humain</h3>Au moins 1 seconde entre deux clics, et attente de la fin du chargement de chaque nouvel écran.</div>
+    <div class="carte"><h3>Clic non pris en compte</h3>Si l'écran suivant n'apparaît pas en 4 s, le même bouton est recliqué (3 fois au plus).</div>
+    <div class="carte"><h3>Logiciel en attente</h3>Comme un utilisateur qui clique n'importe où pour « réveiller » le logiciel : après 15 s sans réaction, clic dans une zone vide (3 fois au plus).</div>
+    <div class="carte"><h3>Champs préremplis</h3>GENICIA++ réécrit le dernier cheptel recherché : il est effacé et relu avant chaque recherche, pour ne jamais tomber sur le mauvais éleveur.</div>
+    <div class="carte"><h3>Surveillance</h3>Si plus rien ne bouge pendant 1 minute, le traitement est arrêté proprement et la réponse le signale.</div>
+    <div class="carte"><h3>Rapport détaillé</h3>Chaque clic, saisie et lecture est noté avec l'heure : la dernière ligne montre où un problème est survenu.</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="incertitudes">
+  <h2>Les incertitudes</h2>
+  <p class="chapeau">Règle d'or : <b>une demande manquée se rattrape facilement, une action fausse beaucoup moins</b>.
+  Dès qu'il y a une incertitude, aucune demande du mail n'est exécutée, et la réponse liste les points à clarifier.</p>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Situation</th><th>Exemple</th><th>Ce qu'il faut fournir</th></tr></thead>
+    <tbody>
+      <tr><td><b>Éleveur non identifié</b></td><td>Ni cheptel ni nom dans le mail</td><td>Le n° de cheptel</td></tr>
+      <tr><td><b>Nombre de factures absent</b></td><td>« Ses dernières factures » sans dire combien</td><td>Le nombre ou les dates</td></tr>
+      <tr><td><b>Date impossible ou future</b></td><td>« La facture du 31/02 », une date à venir</td><td>La bonne date</td></tr>
+      <tr><td><b>Profil web inconnu</b></td><td>Un profil qui n'existe pas dans GENICIA++</td><td>Un profil autorisé</td></tr>
+      <tr><td><b>Demande hors périmètre</b></td><td>Un changement d'adresse (c'est EGESYS), une question générale</td><td>Traitement manuel</td></tr>
+      <tr><td><b>Consignes cachées</b></td><td>Texte qui tente de détourner l'agent</td><td>—</td></tr>
+      <tr><td><b>Compte rendu renvoyé</b></td><td>Une réponse automatique revenue dans la boîte : <i>ignorée</i>, pour éviter toute boucle</td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="erreurs">
+  <h2>Les erreurs et leur traitement</h2>
+  <p class="chapeau">Chaque erreur est traduite en français clair dans la réponse ; le détail technique reste dans le
+  rapport.</p>
+
+  <h3 style="margin:18px 0 10px">Avant d'ouvrir GENICIA++ (contrôle)</h3>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Erreur</th><th>Cause</th><th>Conséquence</th></tr></thead>
+    <tbody>
+      <tr><td>JSON illisible</td><td>Réponse de l'agent mal formée ou coupée (retentée 60 s)</td><td><span class="pastille p-rouge">error/</span> rien n'est exécuté</td></tr>
+      <tr><td>Action inconnue / clés incorrectes</td><td>L'agent a inventé une action ou modifié le modèle</td><td><span class="pastille p-rouge">error/</span> rien n'est exécuté</td></tr>
+      <tr><td>Valeur invalide</td><td>Cheptel ≠ 8 caractères, date non JJ/MM/AAAA ou future, nombre hors 1-30, profil hors liste</td><td><span class="pastille p-rouge">error/</span> la valeur fautive est citée</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="margin:24px 0 10px">Pendant l'exécution dans GENICIA++</h3>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Erreur</th><th>Ce qui s'est passé</th><th>Conséquence</th></tr></thead>
+    <tbody>
+      <tr><td>Aucune facture à la date</td><td>Pas de facture ce jour-là ; les plus proches sont listées</td><td><span class="pastille p-orange">Facture à préciser</span></td></tr>
+      <tr><td>Une des dates sans facture</td><td>Les autres factures sont trouvées</td><td><span class="pastille p-vert">envoyé</span> avec « Non trouvée »</td></tr>
+      <tr><td>Éleveur introuvable par son nom</td><td>Aucun ou plusieurs éleveurs portent ce nom</td><td><span class="pastille p-orange">rien n'est fait</span> éleveurs possibles listés</td></tr>
+      <tr><td>Boîte de dialogue inattendue</td><td>Une fenêtre imprévue s'est ouverte</td><td><span class="pastille p-rouge">arrêt</span> par sécurité, sans cliquer au hasard</td></tr>
+      <tr><td>GENICIA++ ne répond plus</td><td>Aucune activité pendant 1 min malgré les clics de déblocage</td><td><span class="pastille p-rouge">arrêt</span> réponse en erreur</td></tr>
+      <tr><td>GENICIA++ ne s'ouvre pas</td><td>Instance bloquée sans fenêtre (arrêtée et relancée une fois)</td><td><span class="pastille p-rouge">arrêt</span> si le 2e essai échoue</td></tr>
+      <tr><td>GENICIA++ occupé</td><td>Un autre traitement l'utilise depuis plus d'1 h</td><td><span class="pastille p-rouge">abandon</span> à renvoyer</td></tr>
+      <tr><td>Espace adhérent non vérifié</td><td>La vérification après les factures a échoué</td><td><span class="pastille p-orange">factures envoyées</span> avec un avertissement</td></tr>
+      <tr><td>Traitement interrompu</td><td>PC éteint ou veilleur arrêté pendant l'exécution</td><td><span class="pastille p-rouge">jamais relancé</span> à vérifier dans GENICIA++</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="encadre orange">Les demandes d'un même mail s'exécutent dans l'ordre. Après une erreur, la suivante n'est
+  tentée que si GENICIA++ est revenu proprement à l'accueil. La réponse indique précisément ce qui a été fait.</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="resultats">
+  <h2>Les issues possibles</h2>
+  <p class="chapeau">L'objet de nos réponses commence par « GENICIA++ : » et ne contient jamais « G++ » : une réponse
+  revenue dans la boîte surveillée ne relance donc pas le traitement.</p>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Code</th><th>Situation</th><th>Dossier</th><th>Objet de la réponse</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pastille p-vert">EXECUTE</span></td><td>Tout a été fait</td><td><code>completed/</code></td><td>GENICIA++ : Demande traitée</td></tr>
+      <tr><td><span class="pastille p-vert">EXECUTE</span></td><td>Factures envoyées, certaines dates sans facture (ou moins que demandé)</td><td><code>completed/</code></td><td>GENICIA++ : Demande traitée, factures manquantes</td></tr>
+      <tr><td><span class="pastille p-orange">ERREUR_EXECUTION</span></td><td>Aucune facture à aucune des dates demandées</td><td><code>error/</code></td><td>GENICIA++ : Facture à préciser</td></tr>
+      <tr><td><span class="pastille p-rouge">ERREUR_EXECUTION</span></td><td>Une partie ou tout a échoué</td><td><code>error/</code></td><td>GENICIA++ : Demande partiellement traitée · Erreur lors du traitement</td></tr>
+      <tr><td><span class="pastille p-orange">REFUSE_VALIDATION</span></td><td>Incertitude ou information manquante</td><td><code>error/</code></td><td>GENICIA++ : Précisions nécessaires · Demande non traitée</td></tr>
+      <tr><td><span class="pastille p-rouge">INTERROMPU</span></td><td>PC ou veilleur arrêté en cours de route</td><td><code>error/</code></td><td>GENICIA++ : Traitement interrompu, à vérifier dans GENICIA++</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="securite">
+  <h2>Les garde-fous</h2>
+  <p class="chapeau">GENICIA++ travaille sur la base de <b>production</b> : le système est conçu pour ne jamais faire
+  une action douteuse.</p>
+  <div class="grille">
+    <div class="carte"><h3>Rien sans certitude</h3>Une seule incertitude ou erreur de contrôle bloque <b>toutes</b> les demandes du mail.</div>
+    <div class="carte"><h3>Écriture limitée</h3>Seule l'action « espace adhérent » modifie des données ; les factures sont en lecture seule.</div>
+    <div class="carte"><h3>Bonne facture, bon éleveur</h3>N° de facture contrôlé avant chaque PDF ; cheptel relu après saisie ; nom ambigu = rien n'est fait.</div>
+    <div class="carte"><h3>Bon destinataire</h3>L'éleveur reçoit ses factures à l'adresse de GENICIA++, jamais à une adresse lue dans le mail.</div>
+    <div class="carte"><h3>Arrêt plutôt que hasard</h3>Fenêtre imprévue ou logiciel figé : arrêt propre, sans cliquer au hasard.</div>
+    <div class="carte"><h3>Jamais de double action</h3>Un traitement interrompu n'est jamais relancé automatiquement.</div>
+    <div class="carte"><h3>Un seul à la fois</h3>Un seul PC traite les mails, et un seul programme pilote GENICIA++ (file d'attente).</div>
+    <div class="carte"><h3>Identifiants protégés</h3>Gestionnaire d'identifiants Windows ; mots de passe masqués dans les rapports, jamais écrits dans un fichier.</div>
+    <div class="carte"><h3>Pas de boucle</h3>Filtre « G++ » à l'entrée, jamais dans nos réponses ; l'agent ignore les comptes rendus renvoyés.</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="bilan">
+  <h2>Bilan au 20/11/2026</h2>
+  <p class="chapeau">Où en est le projet, ce qu'il apporte, et ce qu'il reste à décider.</p>
+  <div class="grille">
+    <div class="carte">
+      <h3><span class="pastille p-vert">Fait</span> En service</h3>
+      <ul style="margin:0;padding-left:20px">
+        <li>Chaîne complète du mail aux réponses, sans intervention.</li>
+        <li>Duplicatas : une date, plusieurs dates, périodes, N dernières.</li>
+        <li>Éleveur trouvé par son cheptel ou par son nom.</li>
+        <li>Factures envoyées au demandeur <b>et</b> à l'éleveur.</li>
+        <li>Espace adhérent créé à la demande ou automatiquement.</li>
+        <li>Nombreux mails de test réels concluants ; GENICIA++ ne se bloque plus.</li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-bleu">Gains</span> Ce que ça apporte</h3>
+      <ul style="margin:0;padding-left:20px">
+        <li>Plus de recherche manuelle de factures : un mail transféré suffit.</li>
+        <li>L'éleveur reçoit ses duplicatas directement, en quelques minutes.</li>
+        <li>Moins d'oublis : l'espace adhérent est vérifié à chaque fois.</li>
+        <li>Tout est tracé : rapport détaillé et compte rendu.</li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-orange">À noter</span> Limites actuelles</h3>
+      <ul style="margin:0;padding-left:20px">
+        <li>Le PC doit être allumé, session ouverte et <b>non utilisée</b> pendant un traitement (vrais clics de souris).</li>
+        <li>Un mail à la fois ; ~10 min pour 13 factures.</li>
+        <li>Pas encore de liste d'expéditeurs autorisés pour l'espace adhérent.</li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-violet">Ensuite</span> Prochaines étapes</h3>
+      <ul style="margin:0;padding-left:20px">
+        <li>Validation par le service informatique (automatisation, compte de base en lecture seule).</li>
+        <li>Idéalement, un PC dédié au traitement des mails.</li>
+        <li>Restreindre les expéditeurs autorisés.</li>
+        <li>Journal Excel comme EGESYS ; nouvelles actions selon les besoins.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="fichiers">
+  <h2>À quoi sert chaque fichier</h2>
+  <p class="chapeau">Le projet est dans <code>OneDrive - Sogen\SOGEN\G++</code> (synchronisé sur les deux PC). Cliquez sur un groupe pour le déplier.</p>
+
+  <details open>
+    <summary>Automatisation par mail (le veilleur)<span class="compte">6 fichiers</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>veilleur/veilleur_genicia.py</code></div><div><p>Le chef d'orchestre : surveille <code>pending/</code>, contrôle, lance l'exécution avec une surveillance (1 min sans activité = arrêt), range dans <code>completed/</code> ou <code>error/</code>, écrit la réponse dans <code>result/</code>.</p><div class="usage">Lancé par <code>lancer_veilleur.bat</code></div></div></div>
+      <div class="fichier"><div class="nom"><code>veilleur/compte_rendu.py</code></div><div><p>Rédige la réponse au demandeur (objet + corps HTML) et le mail à l'éleveur ; traduit les messages techniques en français clair.</p></div></div>
+      <div class="fichier"><div class="nom"><code>ordres_genicia.py</code></div><div><p>Référence des actions par mail (modèles JSON, champs, listes) et contrôle du JSON de l'agent.</p><div class="usage"><code>python ordres_genicia.py fichier.json</code></div></div></div>
+      <div class="fichier"><div class="nom"><code>executer_ordres.py</code></div><div><p>Exécute dans GENICIA++ les ordres d'un JSON contrôlé : recherche de l'éleveur, factures, espace, mail de l'éleveur, fermeture.</p></div></div>
+      <div class="fichier"><div class="nom"><code>veilleur/poste_actif.py</code></div><div><p>Garantit qu'un seul des deux PC traite les mails. Copie identique de celui d'EGESYS.</p></div></div>
+      <div class="fichier"><div class="nom"><code>lancer_veilleur.bat</code> · <code>.ps1</code></div><div><p>Identifiants, lancement en arrière-plan, démarrage automatique, état, arrêt.</p><div class="usage"><code>-Identifiants</code>, <code>-Installer</code>, <code>-Etat</code>, <code>-Arreter</code></div></div></div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Pilotage de GENICIA++<span class="compte">6 fichiers</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>genicia_auto.py</code></div><div><p>La boîte à outils : lancer et fermer GENICIA++, se connecter, trouver un bouton ou un champ, cliquer au rythme d'un humain, écrire, lire, débloquer le logiciel, tenir le journal détaillé.</p></div></div>
+      <div class="fichier"><div class="nom"><code>action_facture.py</code></div><div><p>Les étapes des duplicatas de factures (une ou plusieurs, N dernières).</p></div></div>
+      <div class="fichier"><div class="nom"><code>action_espace_adherent.py</code></div><div><p>Création et vérification de l'espace adhérent web.</p></div></div>
+      <div class="fichier"><div class="nom"><code>action_mail_eleveur.py</code></div><div><p>Lecture de l'adresse mail de l'éleveur (zone « Coordonnées » du bilan, fiche éleveur en secours).</p></div></div>
+      <div class="fichier"><div class="nom"><code>file_attente_genicia.py</code></div><div><p>Un seul programme à la fois dans GENICIA++ ; les autres attendent leur tour.</p></div></div>
+      <div class="fichier"><div class="nom"><code>main.py</code></div><div><p>Lancement à la main d'une action (facture ou espace), sans passer par un mail.</p><div class="usage"><code>python main.py facture 64233008 31/03/2019</code></div></div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Agent Copilot et tests<span class="compte">6 éléments</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>copilot/instructions.md</code></div><div><p>Instructions à coller dans l'agent : rôle, format JSON, règles (cheptel, dates, N dernières, nom seul).</p><div class="usage">Limite Copilot ≈ 8 000 caractères (≈ 7 550 utilisés)</div></div></div>
+      <div class="fichier"><div class="nom"><code>copilot/genicia-modeles-json/SKILL.md</code></div><div><p>Compétence de l'agent : modèles JSON exacts et exemples.</p><div class="usage">Générée par <code>generer_doc_copilot.py</code> : ne pas modifier à la main</div></div></div>
+      <div class="fichier"><div class="nom"><code>copilot/exemples.md</code></div><div><p>Exemples de mails traités (données fictives), repris dans la compétence.</p></div></div>
+      <div class="fichier"><div class="nom"><code>copilot/tests/mails_de_test.md</code></div><div><p>40 mails de test avec le résultat attendu, tous sur l'éleveur de test 64233008.</p></div></div>
+      <div class="fichier"><div class="nom"><code>envoyer_mails_test.py</code></div><div><p>Transforme les mails de test en vrais mails (dossier <code>TESTS_MAILS</code>) qui déclenchent toute la chaîne.</p><div class="usage"><code>python envoyer_mails_test.py 34-40</code> · <code>--liste</code></div></div></div>
+      <div class="fichier"><div class="nom"><code>comparer_reponse_copilot.py</code></div><div><p>Compare une réponse de l'agent à la réponse attendue.</p></div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Outils et documentation<span class="compte">7 éléments</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>enregistrer_identifiants.py</code></div><div><p>Range les identifiants GENICIA++ dans le Gestionnaire d'identifiants Windows.</p></div></div>
+      <div class="fichier"><div class="nom"><code>inspecter_ecran.py</code></div><div><p>Liste les éléments de l'écran ouvert : sert à préparer une nouvelle action.</p></div></div>
+      <div class="fichier"><div class="nom"><code>lecture_bdd.py</code></div><div><p>Lecture directe de la base (requêtes <code>SELECT</code> uniquement).</p></div></div>
+      <div class="fichier"><div class="nom"><code>nettoyer_onedrive.py</code></div><div><p>Vide les dossiers <code>completed</code>, <code>error</code>, <code>result</code> du OneDrive G++.</p></div></div>
+      <div class="fichier"><div class="nom"><code>README.md</code></div><div><p>Guide d'utilisation.</p></div></div>
+      <div class="fichier"><div class="nom"><code>prise_en_main.md</code></div><div><p>Document de reprise pour le développement : pièges techniques, architecture, état.</p></div></div>
+      <div class="fichier"><div class="nom"><code>presentation_projet.html</code></div><div><p>Cette page.</p></div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Produits à l'exécution<span class="compte">dossiers</span></summary>
+    <div class="contenu">
+      <div class="fichier"><div class="nom"><code>%LOCALAPPDATA%\GENICIA\</code></div><div><p>Propre à chaque PC : journal du veilleur (<code>veilleur.log</code>), verrous, file d'attente, rapports, dossier de travail.</p></div></div>
+      <div class="fichier"><div class="nom"><code>OneDrive - Sogen\G++\pending\</code></div><div><p>Entrée : JSON de l'agent déposé par Power Automate.</p></div></div>
+      <div class="fichier"><div class="nom"><code>…\G++\processing\</code></div><div><p>JSON en cours d'exécution (vide quand rien ne tourne).</p></div></div>
+      <div class="fichier"><div class="nom"><code>…\G++\completed\</code> · <code>error\</code></div><div><p>Dossier complet de chaque mail : JSON, rapport, résultat, PDF.</p></div></div>
+      <div class="fichier"><div class="nom"><code>…\G++\result\</code> · <code>result\pdf\</code></div><div><p>Réponse à envoyer et PDF à joindre (supprimés par le flux après envoi).</p></div></div>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================ -->
+<section id="exploitation">
+  <h2>Exploitation au quotidien</h2>
+  <p class="chapeau">Toutes les commandes se lancent dans PowerShell, depuis le dossier <code>SOGEN\G++</code> du OneDrive.</p>
+  <div class="defile">
+  <table class="tableau">
+    <thead><tr><th>Pour…</th><th>Commande</th></tr></thead>
+    <tbody>
+      <tr><td>Enregistrer les identifiants GENICIA++ (première fois)</td><td><code>.\lancer_veilleur.bat -Identifiants</code></td></tr>
+      <tr><td>Lancer le veilleur en arrière-plan</td><td><code>.\lancer_veilleur.bat</code> (ou double-clic)</td></tr>
+      <tr><td>Le lancer à chaque ouverture de session</td><td><code>.\lancer_veilleur.bat -Installer</code></td></tr>
+      <tr><td>Savoir s'il tourne, et sur quel PC</td><td><code>.\lancer_veilleur.bat -Etat</code></td></tr>
+      <tr><td>Suivre son journal en direct</td><td><code>Get-Content $env:LOCALAPPDATA\GENICIA\veilleur.log -Wait -Tail 20 -Encoding UTF8</code></td></tr>
+      <tr><td>L'arrêter (refusé si un traitement est en cours)</td><td><code>.\lancer_veilleur.bat -Arreter</code></td></tr>
+      <tr><td>Exécuter à la main un JSON contrôlé</td><td><code>python executer_ordres.py fichier_valide.json</code></td></tr>
+      <tr><td>Envoyer des mails de test (vraie exécution)</td><td><code>python envoyer_mails_test.py 34-40</code></td></tr>
+      <tr><td>Vider le OneDrive G++</td><td><code>python nettoyer_onedrive.py</code> (<code>--jours 30</code> pour garder le dernier mois)</td></tr>
+      <tr><td>Régénérer la compétence de l'agent</td><td><code>python generer_doc_copilot.py</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="margin:28px 0 10px">Ajouter une nouvelle action</h3>
+  <div class="carte">
+    <ol style="margin:0;padding-left:20px">
+      <li>Décrire précisément le parcours dans le logiciel (écrans, boutons, champs).</li>
+      <li>Le reproduire pas à pas avec <code>inspecter_ecran.py</code>, puis l'écrire dans un fichier <code>action_….py</code>.</li>
+      <li>La tester à la main sur l'éleveur de test, plusieurs fois.</li>
+      <li>L'ajouter au catalogue (<code>ordres_genicia.py</code>) et à <code>executer_ordres.py</code>, régénérer la compétence de l'agent.</li>
+      <li>Ajouter un mail de test, puis une vraie exécution par mail.</li>
+    </ol>
+  </div>
+  <div class="encadre orange">Pendant un traitement (notification « traitement en cours »), ne touchez ni au clavier ni à
+  la souris du PC : GENICIA++ est piloté par de vrais clics.</div>
+</section>
+
+</main>
+
+<footer>Automatisation GENICIA++ · SOGEN · mise à jour le 20/11/2026 · Python (Java Access Bridge, pywinauto), Microsoft 365 (Copilot, Power Automate, OneDrive) · <a href="../EGESYS/presentation_projet.html">voir aussi le projet EGESYS</a></footer>
+
+<script>
+// Surligne dans le menu la section en cours de lecture
+(function () {
+  var liens = document.querySelectorAll('nav a[href^="#"]');
+  var sections = Array.prototype.map.call(liens, function (a) { return document.querySelector(a.getAttribute('href')); });
+  function maj() {
+    var courant = 0;
+    sections.forEach(function (s, i) { if (s && s.getBoundingClientRect().top < 120) courant = i; });
+    liens.forEach(function (a, i) { a.classList.toggle('actif', i === courant); });
+  }
+  document.addEventListener('scroll', maj, { passive: true });
+  maj();
+})();
+</script>
+</body>
+</html>

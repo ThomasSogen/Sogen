@@ -78,7 +78,7 @@ def traduire_erreur_validation(texte):
         return f"Le n° de cheptel « {cheptel.group(1)} » n'est pas valide (8 caractères attendus, ex : 64284002)."
     date = re.match(r"date de facture invalide : '(.*?)'", texte)
     if date:
-        return f"La date de facture « {date.group(1)} » n'est pas une date valide (attendu : JJ/MM/AAAA)."
+        return f"La date de facture « {date.group(1)} » n'est pas une date valide (attendu : JJ/MM/AAAA, ou une période JJ/MM/AAAA au JJ/MM/AAAA)."
     futur = re.match(r"date de facture dans le futur : '(.*?)'", texte)
     if futur:
         return f"La date de facture « {futur.group(1)} » est dans le futur."
@@ -169,6 +169,8 @@ def dates_lisibles(periodes, nombre_dernieres=""):
 
 def valeurs_demandees(ordre):
     if ordre.get("action") == "telecharger_facture":
+        if " au " in str(ordre.get("date_facture", "")):     # jour inconnu : période où chercher la facture
+            return [f"Facture cherchée : « {dates_lisibles(ordre['date_facture'])} »"]
         return [f"Date de la facture : « {ordre.get('date_facture') or 'non précisée'} »"]
     if ordre.get("action") == "telecharger_factures":
         return [f"Factures demandées : « {dates_lisibles(ordre.get('periodes', ''), ordre.get('nombre_dernieres', '')) or 'non précisées'} »"]
@@ -293,6 +295,10 @@ def rediger(code, controle, resultats_execution=None):
             if resultat.get("manquantes"):
                 motif = raison(MOTIF_FACTURES_MANQUANTES)
                 incompletes += 1
+            elif resultat.get("plusieurs_trouvees"):
+                motif = raison(f"Une facture était demandée {resultat.get('periode_facture', '')}, mais plusieurs "
+                               f"factures ont été trouvées sur cette période : les {len(resultat.get('fichiers', []))} "
+                               "duplicatas sont joints à ce mail.")
             elif ordre.get("action") in ACTIONS_FACTURES and resultat.get("fichiers"):
                 motif = raison("Les duplicatas PDF sont joints à ce mail." if len(resultat["fichiers"]) > 1
                                else "Le duplicata PDF est joint à ce mail.")
@@ -406,6 +412,8 @@ def rediger(code, controle, resultats_execution=None):
         objet = "Traitement interrompu, à vérifier dans GENICIA++"
     elif ordres and len(executees) == total and incompletes:
         objet = "Demande traitée, factures manquantes"
+    elif ordres and len(executees) == total and any(r.get("plusieurs_trouvees") for r in resultats.values()):
+        objet = "Demande traitée, plusieurs factures trouvées"     # une facture demandée sur une période : toutes
     elif ordres and len(executees) == total:
         objet = "Demande traitée"
     elif executees:
@@ -473,6 +481,12 @@ def mail_client(resultats, pdf):
             suite = f"Vous trouverez les {len(factures)} factures correspondantes en pièces jointes de ce mail :"
         demande = (f"Vous nous avez demandé les duplicatas de vos factures ({e(quand)}, cheptel n° {e(cheptel)}). "
                    + suite)
+    elif len(ordres) == 1 and ordres[0].get("plusieurs_trouvees") and len(factures) > 1:
+        # une facture demandée sans le jour (« ma facture de mars ») : plusieurs trouvées sur la période
+        objet = f"{OBJET_CLIENT}duplicatas de vos factures"
+        demande = (f"Vous nous avez demandé votre facture {e(ordres[0].get('periode_facture', ''))} (cheptel n° "
+                   f"{e(cheptel)}). Nous avons trouvé {len(factures)} factures sur cette période : vous les "
+                   "trouverez toutes en pièces jointes de ce mail :")
     elif len(factures) == 1:
         objet = f"{OBJET_CLIENT}duplicata de votre facture du {factures[0][1]}"
         demande = (f"Vous nous avez demandé le duplicata de votre facture du {e(factures[0][1])} "

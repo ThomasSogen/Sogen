@@ -279,6 +279,10 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
             if resultat.get("manquantes"):     # plusieurs factures : certaines dates sans facture
                 incompletes += 1
                 detail = MOTIF_FACTURES_MANQUANTES + (f" {detail}." if detail else "")
+            elif resultat.get("plusieurs_trouvees"):   # une facture demandée sans le jour : plusieurs sur la période
+                detail = (f"Une facture était demandée {resultat.get('periode_facture', '')}, mais plusieurs factures "
+                          "ont été trouvées sur cette période : tous les duplicatas sont joints à ce mail."
+                          + (f" {detail}." if detail else ""))
             executees.append((*entete, faits, raison(detail) if detail else None))
         elif resultat.get("resultat") == "Erreur" and resultat.get("detail", "").startswith("Modification faite"):
             faits = resultat.get("modification", "").splitlines() or demande
@@ -291,7 +295,9 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
             elif "Par sécurité, aucune" in detail or "correspondent aux critères" in detail or "AUCUNE" in detail:
                 # Chaque candidate : « - N° … | Date … | TTC … », candidates séparées elles aussi par « | »
                 candidates = [nettoyer(c) for c in re.findall(r'- (N°.*?)(?= \| - N°|$)', detail)]
-                if ordre.get("action") != "telecharger_factures_client":
+                # une facture demandée sur une période (jour inconnu) est cherchée comme plusieurs factures
+                sur_periode = " au " in str((ordre.get("facture") or {}).get("date_realisation", ""))
+                if ordre.get("action") != "telecharger_factures_client" and not sur_periode:
                     texte = ("Aucune facture ou plusieurs factures correspondent aux critères du mail : rien n'a "
                              "été récupéré pour éviter une erreur.")
                 elif "clients différents" in detail:
@@ -412,6 +418,8 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
         objet = "Traitement interrompu, à vérifier dans EGESYS"
     elif ordres and len(executees) == total and incompletes:
         objet = "Demande traitée, factures manquantes"
+    elif ordres and len(executees) == total and any(r.get("plusieurs_trouvees") for r in resultats.values()):
+        objet = "Demande traitée, plusieurs factures trouvées"    # une facture demandée sur une période : toutes
     elif ordres and len(executees) == total:
         objet = "Demande traitée"
     elif executees:
@@ -468,7 +476,15 @@ def mail_client(details_ordres, pdf, ordres_recus=()):
 
     numeros = list(dict.fromkeys(f.get("numero_facture", "") for f in factures))   # sans doublon, dans l'ordre
     code = factures[0].get("code_client", "")
-    if len(numeros) == 1:
+    plusieurs = [d for d in avec_factures if d.get("plusieurs_trouvees")]
+    if len(avec_factures) == 1 and plusieurs and len(numeros) > 1:
+        # une facture demandée sans le jour (« ma facture de mars ») : plusieurs trouvées sur la période
+        objet = f"{OBJET_CLIENT}duplicatas de vos factures"
+        demande = (f"Vous nous avez demandé votre facture {e(plusieurs[0].get('periode_facture', ''))} (client n° "
+                   f"{e(code)}). Nous avons trouvé {len(numeros)} factures sur cette période : vous les trouverez "
+                   "toutes en pièces jointes de ce mail :")
+        elements = [f"Facture n° {e(n)}" for n in numeros]
+    elif len(numeros) == 1:
         objet = f"{OBJET_CLIENT}duplicata de votre facture n° {numeros[0]}"
         demande = (f"Vous nous avez demandé le duplicata de votre facture n° {e(numeros[0])} (client n° {e(code)}). "
                    "Vous le trouverez en pièce jointe de ce mail.")

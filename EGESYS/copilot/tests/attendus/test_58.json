@@ -1,0 +1,18 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "telecharger_facture_client",
+      "justification": "*",
+      "code_client": "64233008",
+      "nom_client": "",
+      "facture": {
+        "date_etat": "",
+        "date_realisation": "01/09/2018 au 30/09/2018",
+        "montant": "",
+        "numero_facture": ""
+      }
+    }
+  ],
+  "incertitudes": []
+}

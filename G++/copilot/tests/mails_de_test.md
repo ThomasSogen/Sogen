@@ -34,7 +34,7 @@ Factures du cheptel (dates exactes) : 09/02/2016, 17/08/2016, 05/09/2016, 30/09/
 | 16 | Trois dates exactes | UN ordre, 3 dates |
 | 17 | Une année entière | « 2016 » → 01/01/2016 au 31/12/2016 (4 factures) |
 | 18 | Un trimestre | « 4e trimestre 2017 » → 2 factures |
-| 19 | Un mois | « la facture de mars 2018 » → période du mois |
+| 19 | Une facture d'un mois | « la facture de mars 2018 » → `telecharger_facture`, `date_facture` = "01/03/2018 au 31/03/2018", aucune incertitude ; script : 1 PDF (20/03/2018) |
 | 20 | Date + semestre + date | mélange, dans l'ordre du mail (3 factures) |
 | 21 | Deux mois d'années différentes | février 2016 (29 jours) + mars 2017 |
 | 22 | Dates sans facture au milieu | toutes les dates recopiées ; script : 1 PDF + 2 « Non trouvée » |
@@ -56,6 +56,10 @@ Factures du cheptel (dates exactes) : 09/02/2016, 17/08/2016, 05/09/2016, 30/09/
 | 38 | Dernières factures sans nombre | champs vides + incertitude (combien ?) |
 | 39 | Dernière facture + espace adhérent | deux ordres ; "1" ; script : 31/03/2019 |
 | 40 | Recherche par nom (sans cheptel) | `nom_eleveur` = "EARL BITNAOU", `cheptel` vide ; script : cheptel 64233008 retrouvé par le nom, puis facture du 31/03/2019 |
+| 41 | Une facture d'une année | « sa facture de 2018 » → `telecharger_facture`, `date_facture` = "01/01/2018 au 31/12/2018", aucune incertitude ; script : 2 factures trouvées (20/03 et 30/09/2018), les 2 envoyées avec le message « plusieurs factures trouvées » |
+| 42 | Une facture d'un trimestre | « la facture du 1er trimestre 2019 » → "01/01/2019 au 31/03/2019" ; script : 2 factures (31/01 et 31/03/2019), message « plusieurs factures trouvées » |
+| 43 | Une facture d'un mois, une seule | « sa facture de septembre 2018 » → "01/09/2018 au 30/09/2018" ; script : 1 PDF (30/09/2018) |
+| 44 | Une facture d'un mois sans facture | « sa facture de juin 2018 » → "01/06/2018 au 30/06/2018" ; script : aucune facture, réponse « Facture à préciser » |
 
 ---
 
@@ -267,3 +271,23 @@ Factures du cheptel (dates exactes) : 09/02/2016, 17/08/2016, 05/09/2016, 30/09/
 > Objet : G++ facture BITNAOU
 >
 > Bonjour, l'EARL BITNAOU nous demande un duplicata de sa facture du 31 mars 2019. Merci.
+
+## Test 41
+> Objet : G++ facture 2018
+>
+> Bonjour, le cheptel 64233008 voudrait un duplicata de sa facture de 2018, il ne se souvient plus de la date.
+
+## Test 42
+> Objet : G++ facture premier trimestre
+>
+> Bonjour, pouvez-vous envoyer à l'éleveur 64233008 la facture du 1er trimestre 2019 ? Merci.
+
+## Test 43
+> Objet : G++ facture septembre
+>
+> Bonjour, l'éleveur 64233008 a besoin de sa facture de septembre 2018.
+
+## Test 44
+> Objet : G++ facture juin 2018
+>
+> Bonjour, le cheptel 64233008 demande sa facture de juin 2018.

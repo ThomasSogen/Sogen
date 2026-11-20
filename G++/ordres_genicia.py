@@ -30,7 +30,9 @@ CATALOGUE = {
     "telecharger_facture": {
         "libelle": "Duplicata de facture",
         "description": ("Récupère le duplicata PDF d'une facture d'un éleveur (Bilan éleveur > F5 DETAILLER > "
-                        "F5 DUPLICATA). Lecture seule : rien n'est modifié dans GENICIA++."),
+                        "F5 DUPLICATA), à une date précise ou, si le jour n'est pas connu, dans une période (un mois, "
+                        "un trimestre, une année…). Plusieurs factures dans la période : toutes sont envoyées, avec un "
+                        "message qui le signale. Lecture seule : rien n'est modifié dans GENICIA++."),
         "modele": {"action": "telecharger_facture", "justification": "", "cheptel": "", "nom_eleveur": "",
                    "date_facture": ""},
         "obligatoires": [("cheptel", "nom_eleveur"), "date_facture"],
@@ -40,7 +42,9 @@ CATALOGUE = {
                     "« Code client » et « numéro d'élevage » désignent aussi le n° de cheptel"),
             "nom_eleveur": ("Nom de l'éleveur tel qu'écrit dans le mail, sinon \"\". Sans n° de cheptel, le programme "
                             "retrouve l'éleveur par ce nom dans GENICIA++ (un seul éleveur possible, sinon rien n'est fait)"),
-            "date_facture": "Date de la facture, JJ/MM/AAAA",
+            "date_facture": ("Date de la facture, JJ/MM/AAAA. Si le mail ne donne pas le jour : la période où la "
+                             "chercher, JJ/MM/AAAA au JJ/MM/AAAA (ex : « sa facture de mars 2026 » → "
+                             "\"01/03/2026 au 31/03/2026\" ; « de 2025 » → \"01/01/2025 au 31/12/2025\")"),
         },
     },
     "telecharger_factures": {
@@ -92,8 +96,13 @@ CATALOGUE = {
 def factures_max_estimees(ordre):
     """Nombre de factures au plus attendu pour un ordre (sert au délai maximal d'exécution du veilleur) :
     1 pour une facture ; pour plusieurs : 2 par date précise et 2 par mois de chaque période (plafonné)."""
+    if isinstance(ordre, dict) and ordre.get("action") == "telecharger_facture":
+        periode = periode_facture(ordre.get("date_facture", ""))      # une période : comme plusieurs factures
+        if not periode or periode[0] == periode[1]:
+            return 1
+        ordre = {"action": "telecharger_factures", "periodes": ordre.get("date_facture", "")}
     if not isinstance(ordre, dict) or ordre.get("action") != "telecharger_factures":
-        return 1 if isinstance(ordre, dict) and ordre.get("action") == "telecharger_facture" else 0
+        return 0
     nombre = str(ordre.get("nombre_dernieres", "")).strip()
     if nombre.isdigit() and int(nombre) > 0:
         return min(MAX_FACTURES, int(nombre))
@@ -133,6 +142,19 @@ def lire_periodes(texte):
     if len(periodes) > MAX_PERIODES:
         raise ValueError(f"{len(periodes)} dates ou périodes (maximum {MAX_PERIODES})")
     return periodes
+
+
+def periode_facture(valeur):
+    """« date_facture » d'une demande d'UNE facture : date précise → (jour, jour) ; période « JJ/MM/AAAA au
+    JJ/MM/AAAA » → (début, fin) ; None si ce n'est ni l'un ni l'autre (ou plusieurs morceaux)."""
+    jour = lire_date(valeur)
+    if jour:
+        return jour, jour
+    try:
+        periodes = lire_periodes(valeur)
+    except ValueError:
+        return None
+    return periodes[0] if len(periodes) == 1 else None
 
 
 def texte_periodes(periodes):
@@ -265,13 +287,14 @@ def valider_ordre(ordre):
         else:
             erreurs.append(f"n° de cheptel invalide : '{propre['cheptel']}' (8 caractères attendus)")
     if propre.get("date_facture"):
-        jour = lire_date(propre["date_facture"])
-        if jour is None:
-            erreurs.append(f"date de facture invalide : '{propre['date_facture']}' (JJ/MM/AAAA attendu)")
-        elif jour > date.today():
+        periode = periode_facture(propre["date_facture"])     # date précise, ou période si le jour n'est pas connu
+        if periode is None:
+            erreurs.append(f"date de facture invalide : '{propre['date_facture']}' (JJ/MM/AAAA, ou période "
+                           "JJ/MM/AAAA au JJ/MM/AAAA, attendu)")
+        elif periode[0] > date.today():
             erreurs.append(f"date de facture dans le futur : '{propre['date_facture']}'")
         else:
-            propre["date_facture"] = jour.strftime("%d/%m/%Y")
+            propre["date_facture"] = texte_periodes([periode])
     if propre.get("periodes"):
         try:
             periodes = lire_periodes(propre["periodes"])

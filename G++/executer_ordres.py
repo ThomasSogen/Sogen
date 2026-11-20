@@ -25,7 +25,7 @@ from action_espace_adherent import generer_espace_adherent, verifier_espace_adhe
 from action_facture import telecharger_facture, telecharger_factures
 from action_mail_eleveur import MAILS_BILAN, lire_mail_eleveur
 from file_attente_genicia import GeniciaOccupe, tour_genicia
-from ordres_genicia import libelle_dernieres, libelle_periode, lire_date, lire_periodes
+from ordres_genicia import libelle_dernieres, libelle_periode, lire_date, lire_periodes, periode_facture
 
 DOSSIER_FACTURES = Path(__file__).with_name("factures")
 MAILS_LUS = {}   # cheptel -> adresse mail de la fiche (lue une seule fois par exécution)
@@ -72,6 +72,9 @@ def espace_eleveur(d, cheptel):
 
 
 def executer_facture(d, ordre, dossier):
+    du, au = periode_facture(ordre["date_facture"])
+    if du != au:       # jour inconnu : la facture est cherchée dans la période ; toutes celles trouvées sont envoyées
+        return executer_facture_periode(d, ordre, dossier, du, au)
     date_facture = ordre["date_facture"]
     debut = f"01/01/{lire_date(date_facture).year}"        # période du bilan : depuis le 1er janvier
     chemin = Path(telecharger_facture(d, ordre["cheptel"], date_facture, debut, str(dossier)))
@@ -106,6 +109,28 @@ def executer_factures(d, ordre, dossier):
              "factures": [{"numero_facture": f["numero"], "date_facture": f["date"]} for f in factures]}
     infos["espace_adherent"], lignes = espace_eleveur(d, ordre["cheptel"])
     return detail, [Path(f["chemin"]).name for f in factures], modification + lignes, infos
+
+
+def executer_facture_periode(d, ordre, dossier, du, au):
+    """UNE facture demandée sans le jour (« sa facture de mars 2026 ») : recherche dans la période, comme pour
+    plusieurs factures. Plusieurs factures trouvées → toutes sont envoyées, et le compte rendu comme le mail à
+    l'éleveur le signalent (infos « plusieurs_trouvees »). Aucune → LookupError (« Facture à préciser »)."""
+    periode = libelle_periode(du, au)
+    detail, fichiers, modification, infos = executer_factures(
+        d, dict(ordre, periodes=ordre["date_facture"], nombre_dernieres=""), dossier)
+    factures = infos["factures"]
+    infos.update(periode_facture=periode, plusieurs_trouvees=len(factures) > 1)
+    if len(factures) > 1:
+        detail = (f"Plusieurs factures trouvées pour la période demandée ({periode}) : les {len(factures)} "
+                  "duplicatas ont été récupérés.")
+        modification.insert(0, f"Plusieurs factures trouvées {periode} : les {len(factures)} sont envoyées")
+        print(f"   ℹ️ {len(factures)} factures trouvées {periode} pour une facture demandée : toutes sont envoyées")
+    else:
+        facture = factures[0]
+        infos.update(numero_facture=facture["numero_facture"], date_facture=facture["date_facture"])
+        detail = (f"Duplicata de la facture n° {facture['numero_facture']} du {facture['date_facture']} récupéré "
+                  f"(seule facture {periode}).")
+    return detail, fichiers, modification, infos
 
 
 def executer_espace(d, ordre, _dossier):

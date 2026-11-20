@@ -8,9 +8,17 @@ Trois actions sont disponibles :
 
 | Action | Ce qu'elle fait | Commande | Nom dans le JSON |
 |---|---|---|---|
-| **facture** | Enregistre en PDF le duplicata d'une facture d'un éleveur | `python main.py facture` | `telecharger_facture` |
+| **facture** | Enregistre en PDF le duplicata d'une facture d'un éleveur. Par mail, le jour peut manquer : « sa facture de mars 2019 », « de 2018 », « du 1er trimestre » → la facture est cherchée dans la période ; **s'il y en a plusieurs, toutes sont envoyées** (objet « Demande traitée, plusieurs factures trouvées », et le mail à l'éleveur le dit) ; aucune → « Facture à préciser » | `python main.py facture` | `telecharger_facture` (`date_facture` = « 31/03/2019 » ou « 01/03/2019 au 31/03/2019 ») |
 | **factures** (par mail uniquement) | Enregistre en PDF le duplicata de **plusieurs** factures d'un éleveur : toutes celles de **plusieurs dates précises et/ou périodes** (« la facture du 31/01 et toutes celles de mars », « du 1er trimestre »… ; 30 au maximum), ou ses **N dernières factures** (« sa dernière facture », « ses 3 dernières factures » : les plus récentes du bilan, sur tout l'historique si aucune date n'est donnée ; s'il y en a moins, la réponse le dit). Dans « ANALYSE D'UN BILAN ELEVEUR », seules les lignes de type F dont la Transaction est un n° sont des factures (SOLDE, chèques, prélèvements sont ignorés) ; chaque facture est ouverte, son n° contrôlé, enregistrée, puis retour à l'analyse pour la suivante. **Une date sans facture n'arrête rien** : les autres factures sont envoyées et la réponse (comme le mail au client) indique les dates « Non trouvée », avec les factures les plus proches. Erreur technique en cours de route : aucun PDF n'est envoyé | — | `telecharger_factures` (`periodes` = « 31/01/2026 ; 01/03/2026 au 31/03/2026 » et/ou `nombre_dernieres` = « 3 ») |
 | **espace** | Crée l'espace adhérent web d'un éleveur et lui envoie ses identifiants par mail | `python main.py espace 64233008` | `generer_espace_adherent` |
+
+**L'éleveur** est désigné par son **n° de cheptel** (« code client » et « numéro d'élevage » veulent dire la même
+chose) ou, s'il n'est pas donné, par son **nom** (« EARL BITNAOU ») : le programme le retrouve alors sur l'écran
+« Recherche éleveur » (section 3).
+
+**État au 20/11/2026** : la chaîne complète (mail → agent → GENICIA++ → réponse + mail au client) est en service et a
+passé de nombreux mails de test réels sans blocage de GENICIA++. Présentation illustrée :
+[presentation_projet.html](presentation_projet.html) (à ouvrir dans un navigateur).
 
 **Espace adhérent vérifié à chaque facture (par mail)** : après chaque récupération de facture(s), le programme ouvre
 la fiche « COMMUNICATION AVEC L'ELEVEUR » de l'éleveur. « Droits : Oui » → rien n'est modifié. « Droits : Non » → l'espace
@@ -131,8 +139,9 @@ quel PC fait tourner le veilleur ; un autre PC refuse de démarrer tant que le p
 | `result/` | `<nom>.json` : **la réponse au mail d'origine**, écrite en tout dernier |
 
 Pour chaque `pending/<nom>.json` :
-1. **contrôle** sans GENICIA++ ([ordres_genicia.py](ordres_genicia.py)) : clés exactes, n° de cheptel (8 caractères),
-   date valide et pas dans le futur, profil autorisé, incertitudes de l'agent. Au moindre problème, **rien n'est exécuté** ;
+1. **contrôle** sans GENICIA++ ([ordres_genicia.py](ordres_genicia.py)) : clés exactes, n° de cheptel (8 caractères)
+   ou nom de l'éleveur, dates valides et pas dans le futur, nombre de dernières factures (1 à 30), profil autorisé,
+   incertitudes de l'agent. Au moindre problème, **rien n'est exécuté** ;
 2. **exécution** ([executer_ordres.py](executer_ordres.py)) : lancement et connexion à GENICIA++ si besoin, puis chaque
    demande l'une après l'autre. Après une erreur, on ne continue que si GENICIA++ est revenu proprement à l'accueil.
    À la fin, **GENICIA++ est fermé** (Génicia > Quitter > OUI ; la base s'arrête avec lui). S'il n'est pas revenu
@@ -147,8 +156,9 @@ Pour chaque `pending/<nom>.json` :
    et l'ajoute en pièce jointe, puis le supprime de `result\pdf\` (nettoyage fait par le flux).
 5. **mail au client** : quand des factures ont été récupérées, le JSON contient aussi
    `"client": {"mail", "objet", "corps"}`. Le flux n°2 envoie alors un second mail **à l'éleveur**, avec les mêmes PDF
-   (liste `pdf`) en pièces jointes. L'adresse est lue sur la fiche de l'éleveur dans GENICIA++, jamais dans le mail :
-   Bilan Eleveur → F5 FICHE ELV. → SUIVANT → « e-mail » ([action_mail_eleveur.py](action_mail_eleveur.py)).
+   (liste `pdf`) en pièces jointes. L'adresse est lue dans GENICIA++, jamais dans le mail : sur l'écran
+   « BILAN ELEVEUR », déjà ouvert pour les factures (« Coordonnées : … Email : … ») ; seulement si cette zone est
+   illisible, sur la fiche de l'éleveur (F5 FICHE ELV. → SUIVANT → « e-mail », [action_mail_eleveur.py](action_mail_eleveur.py)).
    `client.mail` est **vide** (rien à envoyer au client) si aucune facture n'a été récupérée, si la fiche n'a pas
    d'adresse, ou si le mail concerne plusieurs éleveurs. L'objet commence par « SOGEN : » et le message est signé
    « Le service administratif de SOGEN » (modifiable dans `veilleur/compte_rendu.py`, `mail_client`).
@@ -163,6 +173,7 @@ Pour chaque `pending/<nom>.json` :
 | Résultat | Code | Dossier | Objet de la réponse |
 |---|---|---|---|
 | Tout a réussi | `EXECUTE` | `completed/` | GENICIA++ : Demande traitée |
+| Une facture demandée sur une période, plusieurs trouvées : toutes envoyées | `EXECUTE` | `completed/` | … Demande traitée, plusieurs factures trouvées |
 | Factures envoyées, mais certaines dates demandées sans facture | `EXECUTE` | `completed/` | … Demande traitée, factures manquantes (lignes « Non trouvée » avec la raison et les factures les plus proches) |
 | Aucune facture à aucune des dates demandées | `ERREUR_EXECUTION` | `error/` | … Facture à préciser (détail date par date) |
 | Une partie ou tout a échoué | `ERREUR_EXECUTION` | `error/` | … partiellement traitée / Erreur lors du traitement |
@@ -195,9 +206,12 @@ ou planté libère sa place tout seul.
   reprend son chemin (« clic de déblocage » dans le rapport).
 - **Adresse mail de l'éleveur** : lue sur l'écran « BILAN ELEVEUR » (« Coordonnées : … Email : … »), déjà ouvert
   pour les factures ; la fiche de l'éleveur n'est plus ouverte que si cette zone est illisible.
-- **Éleveur désigné par son nom** (sans n° de cheptel) : le programme cherche le nom sur « Recherche éleveur »
-  (sans « EARL », « GAEC », « M. »…). Un seul éleveur → son cheptel est utilisé pour toute la suite ; plusieurs ou
-  aucun → rien n'est fait et la réponse le dit (avec les éleveurs possibles).
+- **Éleveur désigné par son nom** (sans n° de cheptel) : le programme cherche le nom dans le champ « Nom : » de
+  « Recherche éleveur » (sans « EARL », « GAEC », « M. »…). Un seul éleveur → son cheptel est utilisé pour toute la
+  suite ; plusieurs ou aucun → rien n'est fait et la réponse le dit (avec les éleveurs possibles).
+- **Champs préremplis** : GENICIA++ réécrit le dernier n° de cheptel recherché. Avant une recherche par nom, ce n° est
+  effacé (et le champ relu pour vérifier qu'il est vide) ; avant une recherche par cheptel, un nom resté est effacé et
+  le n° saisi est relu. Si un champ ne se vide pas, la recherche n'est pas lancée.
 
 > ⚠ **Le PC doit être allumé, la session Windows ouverte et déverrouillée**, OneDrive synchronisé et le veilleur lancé.
 > GENICIA++ est piloté par de vrais clics de souris : pendant un traitement (notification « traitement en cours »),
@@ -232,16 +246,20 @@ Ce veilleur est indépendant de celui d'EGESYS (autres dossiers OneDrive, autre 
 
 ### L'agent Copilot
 
-- **Instructions** : [copilot/instructions.md](copilot/instructions.md), à coller dans l'agent (≈ 6 100 caractères, limite ≈ 8 000).
+- **Instructions** : [copilot/instructions.md](copilot/instructions.md), à coller dans l'agent (≈ 7 550 caractères, limite ≈ 8 000).
+- **Éleveur sans cheptel** : un mail qui ne donne que le nom → `cheptel` vide et `nom_eleveur` rempli, **sans
+  incertitude** (le programme retrouve le cheptel par le nom).
 - **Compétence** : [copilot/genicia-modeles-json/SKILL.md](copilot/genicia-modeles-json/SKILL.md), à charger comme fichier.
   Elle est **générée** par `python generer_doc_copilot.py` à partir de `ordres_genicia.py` et de
   [copilot/exemples.md](copilot/exemples.md) : ne pas la modifier à la main.
+- **Une facture sans le jour** (« sa facture de mars 2019 ») → `telecharger_facture` avec la période dans
+  `date_facture` (« 01/03/2019 au 31/03/2019 »), **sans incertitude** (depuis le 20/11/2026).
 - **Factures** : une seule facture à une date précise → `telecharger_facture` ; plusieurs dates et/ou périodes → UN
   ordre `telecharger_factures` avec `"periodes": "31/01/2026 ; 01/03/2026 au 31/03/2026"` (date précise = JJ/MM/AAAA,
   période = JJ/MM/AAAA au JJ/MM/AAAA, séparées par « ; »). « Sa dernière facture » / « ses N dernières factures » →
   `telecharger_factures` avec `"nombre_dernieres": "N"` (sans date : tout l'historique). « Cheptel », « code client » et « numéro d'élevage »
   désignent la même chose.
-- **Tests** : [copilot/tests/mails_de_test.md](copilot/tests/mails_de_test.md) (39 mails, dont 28 sur les factures : dates exactes, mois, trimestre, année, mélanges, dates sans facture, date future, sans année, N dernières factures (06, 31, 34-39)…) et
+- **Tests** : [copilot/tests/mails_de_test.md](copilot/tests/mails_de_test.md) (44 mails, dont 33 sur les factures : dates exactes, mois, trimestre, année, mélanges, dates sans facture, date future, sans année, N dernières factures (06, 31, 34-39), recherche par nom (40), une facture sur une période (19, 41-44)…) et
   `python comparer_reponse_copilot.py copilot/tests/attendus/test_01.json copilot/tests/reponses/test_01.txt`.
   Envoi automatique des mails de test (comme EGESYS) : `python envoyer_mails_test.py 34-39` (`--liste` pour les voir) :
   les mails partent par le dossier `TESTS_MAILS` et sont VRAIMENT exécutés dans GENICIA++ (cheptel 64233008).
@@ -280,6 +298,7 @@ Ce veilleur est indépendant de celui d'EGESYS (autres dossiers OneDrive, autre 
 | `generer_doc_copilot.py` | Génère la compétence de l'agent (`copilot/genicia-modeles-json/SKILL.md`) |
 | `comparer_reponse_copilot.py` | Compare une réponse de l'agent à la réponse attendue d'un mail de test |
 | `envoyer_mails_test.py` | Mails de test : génère `copilot/tests/mails_json/test_XX.json` depuis `mails_de_test.md` et les dépose dans `OneDrive - Sogen\TESTS_MAILS`, d'où le flux Power Automate les envoie (objet `[G++] [TEST XX] …`). `--liste`, `34-39`, `--tous`, `--generer` |
+| `presentation_projet.html` | Présentation illustrée de tout le projet (à ouvrir dans un navigateur) |
 | `nettoyer_onedrive.py` | Supprime les fichiers accumulés dans le OneDrive G++ (jamais `pending/`, `processing/` ; tout le reste est supprimé, même les fichiers récents) |
 | `copilot/` | Instructions, compétence, exemples et mails de test de l'agent |
 | `config_genicia.py` | Emplacements : dossier OneDrive G++ (trouvé automatiquement), dossier local `%LOCALAPPDATA%\GENICIA` |
@@ -319,6 +338,8 @@ Le script refuse toute requête autre qu'un `SELECT` : rien n'est jamais modifi�
 | Réponse « Délai d'exécution dépassé » ou « Aucune activité depuis 60 s » | GENICIA++ ne répondait plus : le programme a été arrêté. Vérifiez l'écran de GENICIA++, fermez les boîtes ouvertes et revenez à l'accueil. |
 | « GENICIA++ ne s'ouvre pas : aucune fenêtre de connexion » | Un GENICIA++ reste bloqué sans fenêtre : Gestionnaire des tâches (Ctrl+Maj+Échap) → Détails → `javaw.exe` → Fin de tâche, puis renvoyer le mail. |
 | Réponse « Demande traitée, factures manquantes » | Normal : certaines dates demandées n'ont pas de facture (voir « Non trouvée » et les factures les plus proches). Renvoyer la demande avec les bonnes dates si besoin. |
+| Réponse « Plusieurs éleveurs… » ou « Aucun éleveur trouvé… » | Recherche par nom : renvoyer la demande avec le n° de cheptel. |
+| GENICIA++ semble attendre (rien ne bouge, un clic le débloque) | Le programme clique tout seul dans la barre de titre après 15 s (3 fois au plus). Ligne « clic de déblocage » dans le rapport. |
 | Un fichier reste dans `processing/` | Le veilleur est en train de l'exécuter. S'il est arrêté, il le passera dans `error/` (code `INTERROMPU`) au prochain démarrage, sans le relancer. |
 
 ---

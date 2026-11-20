@@ -1,7 +1,8 @@
 # Prise en main du projet (à lire par Claude en début de session)
 
 Ce fichier transmet tout le contexte du projet. Lis-le en entier avant d'agir.
-Mis à jour le 11/11/2026 (chaîne mail ajoutée, voir §10).
+Mis à jour le 20/11/2026 (chaîne mail §10, recherche par nom, N dernières factures, anti-blocage).
+Présentation pour la direction : `presentation_projet.html` (à garder à jour si le fonctionnement change).
 
 ---
 
@@ -97,6 +98,11 @@ Mis à jour le 11/11/2026 (chaîne mail ajoutée, voir §10).
 | Masquage des secrets incomplet (voir règle 1) | Masquer par rôle (`password text`), par libellé voisin et par motif dans les textes longs |
 | **GENICIA++ se fige, éléments « introuvables » au hasard, Python met des minutes à se terminer** (17/11/2026) | Java Access Bridge envoie des messages Windows au thread qui a appelé `Windows_run()` ; non traités, ils s'accumulent et la JVM finit par attendre. **Toute attente passe par `g.pause(s)`** (traite les messages toutes les 50 ms via `pythoncom.PumpWaitingMessages`) ; `elements_affiches` appelle `traiter_messages()`. Ne jamais écrire `time.sleep` dans le code de pilotage |
 | **« Début » (ou autre libellé) introuvable sur l'écran d'analyse** (19/11/2026) | Le menu déroulant d'`aller_a` (ex. Administratif, 38 entrées) reste ouvert quelques secondes ; le parcourir pendant qu'il se referme bloque JAB jusqu'à ~30 s. `elements_affiches(cible, menus=False)` ne descend pas dans `menu bar` / `popup menu` : `visibles()` l'utilise sauf pour les rôles menu ; `attendre_element()` cherche hors menus d'abord (et dans les menus seulement pour un rôle menu ou un rôle non précisé) |
+| **Libellé « Fin » introuvable, test 6 arrêté** (19/11/2026) | Le parcours descendait dans le contenu des listes (des milliers de cellules) : très lent. `elements_affiches(cible, menus=True, listes=False)` saute le contenu des `list` / `table` / `tree` par défaut (`ROLES_LISTES`) ; `lire_lignes` / `liste_affichee` lisent les listes explicitement |
+| **Clic accessible sur une entrée de menu** : le menu reste déroulé, JAB se fige | `aller_a` clique les menus à la SOURIS (`_cliquer_etape`) et reclique la même étape si la suivante n'apparaît pas en 4 s (3 essais). Ne pas « fermer » un menu par des clics bascule (essayé, a aggravé le test 6) |
+| **Clics trop rapides** (l'utilisateur : « tu appuies trop vite ») | `_avant_clic` / `_apres_clic` : ≥ 1 s entre deux clics (`PAUSE_ENTRE_CLICS`), attente d'un titre stable (1 s) et des boîtes après un changement d'écran (`CHARGEMENT_MAX` = 20 s) |
+| **GENICIA++ attend indéfiniment, un clic n'importe où le débloque** (20/11/2026) | Fil `_surveiller_blocages` (`demarrer_debloqueur()`) : 15 s sans action → `clic_zone_vide()` dans la barre de titre de la boîte ou de la fenêtre, 3 fois max, sous `_verrou_souris` (jamais en même temps qu'un clic du programme) |
+| **N° de cheptel prérempli** sur « Recherche éleveur » (dernier recherché) | `vider_champ(cible, libellé)` : efface et relit. Recherche par nom → « N° Cheptel » vidé ; recherche par cheptel → « Nom » vidé et n° relu (chiffres comparés) |
 | La fenêtre de connexion « Genicia++ V… Informations de session » contient « genicia++ v » | La fenêtre principale se cherche avec `attendre_fenetre("GENICIA++ v", classe="SunAwtFrame")` (la connexion est une `SunAwtDialog`) |
 | Saisie de l'identifiant perdue si la fenêtre de connexion n'est pas prête ; ressaisir pendant une connexion en cours → « Mot de Passe inconnu » | `_se_connecter()` : attend les champs, vérifie que l'identifiant est écrit (2 essais), clique OK UNE fois puis attend la fenêtre principale (2 min max) |
 | Relancer GENICIA++ juste après « Quitter » → javaw bloqué sans fenêtre, base jamais démarrée | `_attendre_fin_instance_precedente()` (60 s) puis `_arreter_instances_bloquees()` (taskkill des javaw `StructAccueilIHM` SANS fenêtre uniquement) ; si la connexion n'apparaît pas en 90 s : arrêt + 1 relance. Un javaw lancé depuis le bac à sable de Claude peut être impossible à tuer : demander à l'utilisateur (Gestionnaire des tâches) |
@@ -121,7 +127,9 @@ action_facture.py           telecharger_facture(d, cheptel, date_facture, debut,
 action_espace_adherent.py   generer_espace_adherent(d, cheptel, profil) -> {eleveur, profil, destinataire, abonnements}
                             verifier_espace_adherent(d, cheptel) -> {statut: existant | cree, …} (17/11/2026, appelé
                               après chaque récupération de facture(s) : « Droits » Oui → rien ; Non → création complète)
-action_mail_eleveur.py      lire_mail_eleveur(d, cheptel) -> adresse « e-mail » de la fiche éleveur (lecture seule)
+action_mail_eleveur.py      mail_des_coordonnees(d) -> adresse lue dans « Coordonnées : … Email : … » de BILAN ELEVEUR
+                              (20/11/2026, appelée par action_facture._ouvrir_bilan, rangée dans MAILS_BILAN[cheptel]) ;
+                            lire_mail_eleveur(d, cheptel) -> « e-mail » de la fiche éleveur (secours seulement)
 genicia_auto.py             boîte à outils (voir ci-dessous)
 file_attente_genicia.py     (18/11/2026) `with tour_genicia(desc):` autour de TOUT pilotage de GENICIA++ (main.py,
                               executer_ordres.py). Verrou %LOCALAPPDATA%\GENICIA\execution.lock + tickets FIFO
@@ -152,7 +160,10 @@ factures/                   PDF produits
 ```
 
 Fonctions principales de `genicia_auto.py` :
-- **Anti-blocage** : `pause(s)` (remplace `time.sleep`, traite les messages Windows), `traiter_messages()`.
+- **Journal** (19/11/2026) : `journal(message, signe_de_vie=False)` écrit chaque recherche, clic, saisie (`ecrire(e, texte,
+  masquer=True)` pour un secret) et lecture (`lire(e, quoi)`) avec l'heure, dans la sortie lue par le veilleur → rapport.
+- **Anti-blocage** : `pause(s)` (remplace `time.sleep`, traite les messages Windows, signe de vie toutes les 20 s),
+  `traiter_messages()`, `demarrer_debloqueur()` / `clic_zone_vide()` (fil séparé, voir §4).
 - **Fenêtres** : `lancer_et_connecter()` (attend la fin de l'instance précédente, relance une fois une instance bloquée,
   connexion vérifiée par `_se_connecter`), `attendre_fenetre(titre_partiel, classe=None)`, `attendre_dialogue(d, titre_exact)`,
   `dialogues_ouverts()`, `dialogue_ouvert(titre)`, `titre_fenetre_principale()`, `attendre_ecran(titre)`, `premier_plan(hwnd)`.
@@ -160,12 +171,15 @@ Fonctions principales de `genicia_auto.py` :
   `trouver(cible, nom, role)` (cherche aussi les éléments cachés, par exemple l'entrée d'un menu replié), `enfants(e)`.
   `cible` = un `JABDriver` (fenêtre principale) ou la racine `JABElement` d'une boîte de dialogue.
 - **Actions** : `cliquer()` (accessible), `cliquer_souris()`, `clic_souris_element(e)`, `ouvrir_dialogue(...)`,
-  `cliquer_souris_jusqua(cible, nom, condition)`, `ecrire(element, texte)`, `champ_par_libelle()`,
+  `cliquer_souris_jusqua(cible, nom, condition)`, `ecrire(element, texte)`, `lire(element)`, `vider_champ(cible, libellé)`,
+  `champ_par_libelle()`,
   `liste_deroulante_par_libelle()`, `choisir()`, `valeur_liste_deroulante()`.
 - **Listes** : `liste_affichee()`, `lire_lignes()`, `attendre_lignes()`, `selectionner_ligne()`.
 - **Application** : `lancer_et_connecter()`, `quitter_application(d)` (ferme GENICIA++ depuis l'accueil).
-- **Navigation** : `aller_a(d, "Menu > Entrée > Bouton")` (clics accessibles ; menu introuvable → retour accueil et
-  1 nouvel essai),
+- **Navigation** : `aller_a(d, "Menu > Entrée > Bouton")` (clics SOURIS, étape recliquée si la suivante n'apparaît
+  pas en 4 s ; menu introuvable → retour accueil et 1 nouvel essai),
+  `identifier_cheptel(d, nom_eleveur)` (20/11/2026 : cheptel retrouvé par le champ « Nom : » de « Recherche éleveur » ;
+  un seul résultat, sinon `LookupError` avec les éleveurs possibles),
   `quitter_ecran(d)` (QUITTER (ESC) jusqu'à l'accueil ; s'arrête si une boîte est ouverte),
   `rechercher_eleveur(d, cheptel, ecran_suivant_pret)` (écran de recherche d'éleveur commun à plusieurs menus :
   avec un seul résultat, GENICIA++ passe seul à l'écran suivant).
@@ -184,7 +198,9 @@ Règle pratique : **clic accessible** pour la navigation simple (menus, boutons 
 | Action facture (`python main.py facture`) | Testée 3 fois de bout en bout. PDF vérifié avec pypdf (DUPLICATA, bon n°) |
 | Action espace (`python main.py espace 64284002`) | Testée de bout en bout. **L'étape FACTURES SANS PJ n'a été faite qu'à la main** : au test final, l'abonnement existait déjà et l'étape a été sautée. À valider sur un éleveur sans abonnement |
 | Lecture de la base | `lecture_bdd.py` et `apercu_base.py` fonctionnent (309 tables lues sans erreur) |
-| « N dernières factures » (`nombre_dernieres`, 19/11/2026) | Simulé hors connexion seulement (tri, manque, mail client) ; à tester en réel (tests 06, 31, 34-39) : bilan lu depuis le 01/01/2000 |
+| « N dernières factures » (`nombre_dernieres`, 19/11/2026) | Testé en réel par l'utilisateur (mails de test) : bilan lu depuis le 01/01/2000 |
+| Recherche par nom, mail lu dans « Coordonnées », débloqueur, champs préremplis vidés (19-20/11/2026) | L'utilisateur a passé « pas mal de tests » le 20/11/2026 : « tout a l'air de fonctionner, G++ ne plante plus » |
+| Test 6 (dernière facture) | Exécuté de bout en bout par Claude le 19/11/2026 : PDF 0020000066643 du 31/03/2019, Droits Oui, GENICIA++ fermé |
 | Factures à plusieurs dates / périodes (`telecharger_factures`, 19/11/2026) | Testé en réel sur 64284002 (« 31/01/2026 ; 01/05/2026 au 30/06/2026 ; 15/08/2026 » : 3 PDF, 15/08 « Non trouvée » avec les factures les plus proches, 4 min) ; avant cela, période seule testée sur 64284002 et 64233008 (2019) |
 | Vérification / création automatique de l'espace adhérent après les factures | « Droits : Oui » testé (rien modifié) ; « Droits : Non » testé sur 64233008 (adresse de fiche = celle de l'utilisateur) : espace créé, mail d'identifiants envoyé |
 | Cas limites | Période sans aucune facture (erreur claire, retour accueil, fermeture) ; GENICIA++ déjà ouvert sur un autre écran ; instance bloquée sans fenêtre |
@@ -292,9 +308,21 @@ Décisions de l'utilisateur (11/11/2026) :
 JSON de l'agent : `{resume, id_message, expediteur, ordres, incertitudes}` ; ordres à plat :
 `{action, justification, cheptel, nom_eleveur, date_facture}` (une facture), `{…, periodes}` (plusieurs factures :
 « 31/01/2026 ; 01/03/2026 au 31/03/2026 », ancien format periode_du/periode_au converti par `valider_ordre`) ou
-`{…, profil}` (espace, "" → ELWEB1 STANDARD). Tous les champs sont des textes. Le cheptel est obligatoire (pas de
-recherche par nom ; « code client » et « numéro d'élevage » = cheptel pour l'agent). Période du bilan pour une facture :
-01/01 de l'année de la facture.
+`{…, profil}` (espace, "" → ELWEB1 STANDARD). Tous les champs sont des textes. Obligatoire : `cheptel` OU
+`nom_eleveur` (tuple dans "obligatoires", 20/11/2026) ; cheptel vide → `executer_ordres.piloter` appelle
+`identifier_cheptel` et complète l'ordre (« code client » et « numéro d'élevage » = cheptel pour l'agent ; nom seul →
+pas d'incertitude, règle 7 des instructions). Période du bilan pour une facture : 01/01 de l'année de la facture.
+
+Une facture sans le jour (20/11/2026) : `date_facture` de `telecharger_facture` accepte une date OU UNE période
+« JJ/MM/AAAA au JJ/MM/AAAA » (`ordres_genicia.periode_facture`). Période → `executer_ordres.executer_facture_periode`
+rejoue `executer_factures` sur cette période ; plusieurs factures → toutes envoyées, résultat
+`plusieurs_trouvees` + `periode_facture` → objet « Demande traitée, plusieurs factures trouvées », motif dans le compte
+rendu, phrase dédiée dans `mail_client` ; aucune → LookupError « Aucune facture pour les dates demandées » (Facture à
+préciser). Agent : pas d'incertitude (instructions, exemple 1 bis). Tests 19 et 41-44. Testé hors connexion seulement.
+⚠ **Redémarrer le veilleur après toute modification de `ordres_genicia.py` ou `veilleur/compte_rendu.py`** : il les
+importe une fois au démarrage (contrôle et réponse faits dans son propre processus). Seul `executer_ordres.py` (et ce
+qu'il importe : `genicia_auto`, `action_*`) est relancé à chaque mail. Constaté le 20/11/2026 : test 19 refusé
+(« date de facture invalide ») par un veilleur lancé la veille.
 
 Dernières factures (19/11/2026) : champ `nombre_dernieres` ("" ou 1 à 30) ; obligatoire : `periodes` OU
 `nombre_dernieres` (tuple dans "obligatoires"). Sans dates, `telecharger_factures` lit le bilan depuis
@@ -322,7 +350,9 @@ Mail au client (17/11/2026) : l'utilisateur transfère simplement le mail du cli
 ne fait pas échouer l'ordre. Le résultat de l'ordre porte `mail_client`, `numero_facture`, `date_facture` ;
 `compte_rendu.mail_client()` produit `"client": {mail, objet, corps}` dans `result/<nom>.json` (vide si pas de facture,
 pas d'adresse, ou plusieurs éleveurs). Objet « SOGEN : … » (ni « G++ » ni « GENICIA++ : », pour qu'une réponse du
-client transférée soit traitée). Testé 2 fois sur 64284002.
+client transférée soit traitée). Testé 2 fois sur 64284002. **Depuis le 20/11/2026**, l'adresse est d'abord lue
+dans « Coordonnées » de BILAN ELEVEUR (`mail_des_coordonnees`, `MAILS_BILAN`) ; le chemin par la fiche ci-dessus
+n'est plus qu'un secours.
 
 Fin d'exécution (16/11/2026) : `executer_ordres.py` ferme GENICIA++ par `quitter_application()` (Génicia > Quitter →
 boîte « Confirmation » « Confirmez-vous la sortie de l'application ? » → OUI, clics souris), seulement si l'accueil est
@@ -343,6 +373,10 @@ pas en 4 s (`_cliquer_etape`, 3 essais) ; éleveur sans cheptel : `identifier_ch
 continue seulement si GENICIA++ est revenu à l'accueil sans boîte
 ouverte ; fichier trouvé dans `processing/` au démarrage → `error/` (INTERROMPU), jamais relancé.
 
+| État au 20/11/2026 | |
+|---|---|
+| Ensemble de la chaîne, nombreux mails de test réels (factures, N dernières, recherche par nom, espace) | Concluant selon l'utilisateur ; plus de blocage de GENICIA++ |
+
 | État au 19/11/2026 | |
 |---|---|
 | Contrôle, rangement, réponses (réussite, partiel, factures manquantes, incertitude, invalide, JSON cassé, mail vide, interrompu) | Testé hors ligne avec une exécution simulée |
@@ -351,5 +385,6 @@ ouverte ; fichier trouvé dans `processing/` au démarrage → `error/` (INTERRO
 | Agent Copilot G++ et 2 flux Power Automate | En service ; après chaque évolution, l'utilisateur recolle `instructions.md` et recharge le SKILL.md |
 | Mail de 3 actions enchaînées (facture + factures + espace) sur 64233008 | Pas encore réussi : bloqué le 17/11 par un javaw zombie (problème de lancement corrigé depuis) ; à refaire |
 
-Pistes : retrouver le cheptel par le nom via la base (`lecture_bdd.py`, SELECT) ; facture sans date = la plus
-récente ; joindre le PDF à la réponse ; liste d'expéditeurs autorisés pour « espace » ; journal Excel comme EGESYS.
+Pistes : liste d'expéditeurs autorisés pour « espace » ; journal Excel comme EGESYS ; recherche par nom via la base
+(`lecture_bdd.py`, SELECT ; CHEPTEL → PERSONNE → STATUT) si un compte en lecture seule est fourni.
+(Faits : cheptel retrouvé par le nom dans l'interface, dernière(s) facture(s) sans date, PDF joint à la réponse.)

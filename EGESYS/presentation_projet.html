@@ -38,7 +38,7 @@ h1, h2, h3 { line-height: 1.25; margin: 0; }
 nav { position: sticky; top: 0; z-index: 10; background: var(--carte); border-bottom: 1px solid var(--trait); }
 nav .interieur { max-width: 1100px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; overflow-x: auto; align-items: center; }
 nav .marque { font-weight: 700; color: var(--bleu); margin-right: 12px; white-space: nowrap; padding: 14px 0; }
-nav a { color: var(--doux); text-decoration: none; padding: 14px 10px; white-space: nowrap; font-size: 14px; border-bottom: 2px solid transparent; }
+nav a { color: var(--doux); text-decoration: none; padding: 14px 7px; white-space: nowrap; font-size: 13.5px; border-bottom: 2px solid transparent; }
 nav a:hover, nav a.actif { color: var(--texte); border-bottom-color: var(--bleu); }
 
 main { max-width: 1100px; margin: 0 auto; padding: 0 16px 60px; }
@@ -115,6 +115,23 @@ details .contenu { padding: 0 18px 14px; }
 .fichier p { margin: 0; font-size: 14px; }
 .fichier .usage { color: var(--doux); font-size: 13px; margin-top: 2px; }
 
+/* Exemples */
+.exemple { background: var(--carte); border: 1px solid var(--trait); border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: var(--ombre); }
+.exemple > h3 { font-size: 17px; margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ex-ligne { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.ex-bloc { border-radius: 8px; padding: 12px 14px; background: var(--fond); border: 1px solid var(--trait); font-size: 14px; }
+.ex-bloc .titre-bloc { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--doux); margin-bottom: 6px; }
+.ex-bloc blockquote { margin: 0; font-style: italic; }
+.ex-bloc ol, .ex-bloc ul { margin: 0; padding-left: 18px; }
+.ex-bloc li { margin: 2px 0; }
+.mail { border: 1px solid var(--trait); border-radius: 10px; background: var(--carte); overflow: hidden; box-shadow: var(--ombre); }
+.mail .entete-mail { background: var(--code); padding: 10px 14px; font-size: 13px; color: var(--doux); border-bottom: 1px solid var(--trait); }
+.mail .entete-mail b { color: var(--texte); }
+.mail .corps-mail { padding: 14px 16px; font-size: 14px; }
+.mail .corps-mail p { margin: 0 0 8px; }
+.bandeau { border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+@media (max-width: 860px) { .ex-ligne { grid-template-columns: 1fr; } }
+
 pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; font: 13px/1.5 Consolas, "Cascadia Mono", monospace; margin: 8px 0; }
 footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 16px; border-top: 1px solid var(--trait); }
 
@@ -132,14 +149,17 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
   <div class="interieur">
     <span class="marque">EGESYS auto</span>
     <a href="#circuit">Circuit</a>
+    <a href="#exemples">Exemples</a>
     <a href="#etapes">Étapes</a>
     <a href="#actions">Actions</a>
     <a href="#incertitudes">Incertitudes</a>
     <a href="#erreurs">Erreurs</a>
     <a href="#resultats">Résultats</a>
     <a href="#securite">Sécurité</a>
+    <a href="#bilan">Bilan</a>
     <a href="#fichiers">Fichiers</a>
     <a href="#exploitation">Exploitation</a>
+    <a href="../G++/presentation_projet.html" style="margin-left:auto">Projet G++ →</a>
   </div>
 </nav>
 
@@ -156,6 +176,7 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
     <div class="chiffre"><b>0</b><span>clic : du mail reçu à la réponse</span></div>
     <div class="chiffre"><b>6</b><span>issues possibles, chacune expliquée au demandeur</span></div>
     <div class="chiffre"><b>100 %</b><span>des écritures relues dans EGESYS après enregistrement</span></div>
+    <div class="chiffre"><b>55</b><span>mails de test, couvrant tous les cas</span></div>
   </div>
 </header>
 
@@ -177,6 +198,87 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
     <span><i style="background:var(--violet)"></i>Microsoft 365 (cloud)</span>
     <span><i style="background:var(--bleu)"></i>PC SOGEN (Python)</span>
     <span><i style="background:var(--vert)"></i>Intranet EGESYS (HTTP)</span>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="exemples">
+  <h2>Exemples concrets</h2>
+  <p class="chapeau">Quatre mails tirés des tests (client de test 64233008, données fictives) : ce qui arrive, ce que
+  fait le programme, et ce que reçoit le demandeur. Personne n'intervient entre la réception et la réponse.</p>
+
+  <div class="exemple">
+    <h3><span class="pastille p-vert">EXECUTE</span> Un déménagement</h3>
+    <div class="ex-ligne">
+      <div class="ex-bloc"><div class="titre-bloc">Mail reçu</div>
+        <blockquote>« Le client 64233008 nous signale qu'il a déménagé. Sa nouvelle adresse est : 4 rue des Pyrénées, 64000 Pau. Merci de mettre sa fiche à jour. »</blockquote></div>
+      <div class="ex-bloc"><div class="titre-bloc">Ce que fait le programme</div>
+        <ol><li>L'agent produit un ordre <code>modifier_adresse_client</code>.</li>
+        <li>Validation : client identifié, code postal correct.</li>
+        <li>EGESYS : recherche du client, saisie de l'adresse, enregistrement, <b>relecture</b>.</li>
+        <li>Note de suivi « Modification adresse » : ancienne → nouvelle adresse.</li></ol></div>
+      <div class="ex-bloc"><div class="titre-bloc">Réponse au demandeur</div>
+        <b>EGESYS : Demande traitée</b><br>« ✔ En résumé : tout a été fait (1 demande exécutée). » Puis l'ancienne et la nouvelle adresse.</div>
+    </div>
+  </div>
+
+  <div class="exemple">
+    <h3><span class="pastille p-vert">EXECUTE</span> Deux demandes dans le même mail</h3>
+    <div class="ex-ligne">
+      <div class="ex-bloc"><div class="titre-bloc">Mail reçu</div>
+        <blockquote>« Le client 64233008 a un nouveau téléphone fixe : 05 59 XX XX XX. Merci de lui envoyer aussi ses 2 dernières factures. »</blockquote></div>
+      <div class="ex-bloc"><div class="titre-bloc">Ce que fait le programme</div>
+        <ol><li>Deux ordres : téléphone fixe, puis les 2 dernières factures.</li>
+        <li>Téléphone modifié, relu, note de suivi.</li>
+        <li>Retour au Tableau de bord, comme un utilisateur.</li>
+        <li>Les 2 premières lignes du tableau des factures → 2 duplicatas PDF.</li></ol></div>
+      <div class="ex-bloc"><div class="titre-bloc">Réponses</div>
+        <b>Au demandeur</b> : « Demande traitée », les 2 PDF joints.<br>
+        <b>Au client</b>, à l'adresse de sa fiche : « SOGEN : duplicatas de vos factures », avec les PDF.</div>
+    </div>
+  </div>
+
+  <div class="exemple">
+    <h3><span class="pastille p-orange">A_VERIFIER_BANQUE</span> Un changement de RIB</h3>
+    <div class="ex-ligne">
+      <div class="ex-bloc"><div class="titre-bloc">Mail reçu</div>
+        <blockquote>« Je change de banque. À partir du 01/02/2027, merci de prélever mes factures le 5 du mois sur mon nouveau compte : IBAN FR76 XXXX… »</blockquote></div>
+      <div class="ex-bloc"><div class="titre-bloc">Ce que fait le programme</div>
+        <ol><li>L'agent prépare bien l'ordre de nouveau modèle de règlement.</li>
+        <li>Le garde-fou bancaire le <b>bloque</b> : rien n'est saisi.</li></ol></div>
+      <div class="ex-bloc"><div class="titre-bloc">Réponse au demandeur</div>
+        <b>EGESYS : Coordonnées bancaires à confirmer</b><br>Le changement de RIB par mail est le scénario classique de fraude : confirmer auprès du client par téléphone, puis saisir à la main.</div>
+    </div>
+  </div>
+
+  <div class="exemple">
+    <h3><span class="pastille p-orange">REFUSE_VALIDATION</span> Une demande incomplète</h3>
+    <div class="ex-ligne">
+      <div class="ex-bloc"><div class="titre-bloc">Mail reçu</div>
+        <blockquote>« Le client 64233008 voudrait recevoir ses dernières factures. »</blockquote></div>
+      <div class="ex-bloc"><div class="titre-bloc">Ce que fait le programme</div>
+        <ol><li>L'agent note une incertitude : combien de factures ?</li>
+        <li>Rien n'est exécuté : mieux vaut demander que deviner.</li></ol></div>
+      <div class="ex-bloc"><div class="titre-bloc">Réponse au demandeur</div>
+        <b>EGESYS : Précisions nécessaires</b><br>« Points à clarifier : combien de factures faut-il envoyer, ou pour quelles dates ? »</div>
+    </div>
+  </div>
+
+  <h3 style="margin:26px 0 10px">À quoi ressemble la réponse <span style="font-weight:400;color:var(--doux);font-size:14px">(illustration simplifiée)</span></h3>
+  <div class="mail">
+    <div class="entete-mail"><b>Objet :</b> RE : Client 64233008 - téléphone et factures — <b>EGESYS : Demande traitée</b><br>
+      <b>Pièces jointes :</b> 2 duplicatas PDF</div>
+    <div class="corps-mail">
+      <p style="font-size:18px;font-weight:700;color:var(--bleu)">Résultat du traitement de votre demande EGESYS</p>
+      <p style="font-size:12px;color:var(--doux)"><i>Traité le 20/11/2026 à 10:42</i></p>
+      <div class="bandeau" style="background:var(--vert-fond);color:var(--vert)">✔ <b>En résumé :</b> tout a été fait (2 demandes exécutées).</div>
+      <p style="margin-top:10px"><b style="color:var(--vert)">Demandes exécutées</b></p>
+      <ul style="margin:0 0 8px;padding-left:20px">
+        <li>Téléphone fixe : « ancien n° » → « 05 59 XX XX XX »</li>
+        <li>Les 2 dernières factures : duplicatas joints à ce mail</li>
+      </ul>
+      <p style="color:var(--doux);font-size:13px;margin:0">Une note de suivi a été ajoutée sur la fiche du client.</p>
+    </div>
   </div>
 </section>
 
@@ -241,7 +343,9 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
       <li><b>relit</b> chaque valeur après enregistrement, et rouvre la fiche pour vérifier qu'une ligne ajoutée existe bien ;</li>
       <li>ajoute une <b>note de suivi</b> sur la fiche (ancienne → nouvelle valeur, extrait du mail) ;</li>
       <li>s'arrête net au premier écart, et se <b>déconnecte toujours</b>, même après une erreur ;</li>
-      <li>pour une facture : télécharge le duplicata PDF seulement si <b>une seule</b> facture correspond.</li>
+      <li>pour une facture : télécharge le duplicata PDF seulement si <b>une seule</b> facture correspond ;</li>
+      <li>entre deux demandes du même mail, <b>revient au Tableau de bord</b> comme un utilisateur (Enregistrer, puis
+        la « maison » ; en dernier recours, déconnexion et reconnexion) avant d'enchaîner.</li>
     </ul>
   </div></div>
 
@@ -311,10 +415,10 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
       </ul>
     </div>
     <div class="carte">
-      <h3><span class="pastille p-vert">2</span> Factures (lecture seule)</h3>
+      <h3><span class="pastille p-vert">2</span> Factures (lecture seule, PDF envoyés aussi au client)</h3>
       <ul class="liste-actions">
-        <li><code>telecharger_facture_client</code><span class="desc">Duplicata PDF d'une facture validée. Recherche par numéro (exact), date de facture ou de validation (± 3 jours), montant TTC (± 1 %). Sans critère : la plus récente.</span></li>
-        <li><code>telecharger_factures_client</code><span class="desc">Duplicatas de toutes les factures validées d'une période (ex : un mois), 30 au maximum, un seul client.</span></li>
+        <li><code>telecharger_facture_client</code><span class="desc">Duplicata PDF d'une facture validée. Recherche par numéro (exact), date de facture ou de validation (± 3 jours), montant TTC (± 1 %). Sans critère : la plus récente. Jour inconnu (« sa facture de mars ») : toutes celles de la période, avec un message si elles sont plusieurs.</span></li>
+        <li><code>telecharger_factures_client</code><span class="desc">Duplicatas de plusieurs factures validées : plusieurs dates et/ou périodes (« la facture du 31/01 et toutes celles de mars »), ou les <b>N dernières</b> (« ses 3 dernières factures » = les 3 premières lignes du tableau). 30 au maximum, un seul client. Une date sans facture n'arrête rien : la réponse la signale.</span></li>
       </ul>
     </div>
     <div class="carte">
@@ -343,6 +447,7 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
       <tr><td><b>Pièce jointe absente</b></td><td>« Ci-joint le contrat » mais rien n'est joint</td><td>Renvoyer le mail avec la pièce jointe</td></tr>
       <tr><td><b>Demande hors périmètre</b></td><td>Supprimer une date d'application, changer l'activité, demande sans rapport avec EGESYS</td><td>Traitement manuel</td></tr>
       <tr><td><b>Suppression non explicite</b></td><td>« Ce document n'est plus d'actualité »</td><td>Une demande de suppression claire</td></tr>
+      <tr><td><b>Nombre de factures absent</b></td><td>« Ses dernières factures » sans dire combien</td><td>Le nombre de factures ou les dates</td></tr>
       <tr><td><b>Coordonnée simplement citée</b></td><td>« Vous pouvez la joindre au 06… » : <i>pas</i> une modification, sauf si le mail dit que c'est un nouveau numéro</td><td>—</td></tr>
     </tbody>
   </table>
@@ -402,6 +507,7 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
     <thead><tr><th>Code</th><th>Situation</th><th>Dossier</th><th>Objet de la réponse</th></tr></thead>
     <tbody>
       <tr><td><span class="pastille p-vert">EXECUTE</span></td><td>Tout a été exécuté et vérifié</td><td><code>completed/</code></td><td>EGESYS : Demande traitée</td></tr>
+      <tr><td><span class="pastille p-vert">EXECUTE</span></td><td>Factures envoyées, mais certaines dates demandées sans facture (ou moins de factures que demandé)</td><td><code>completed/</code></td><td>EGESYS : Demande traitée, factures manquantes</td></tr>
       <tr><td><span class="pastille p-orange">REFUSE_VALIDATION</span></td><td>Incertitude de l'agent ou erreur de validation</td><td><code>error/</code></td><td>EGESYS : Précisions nécessaires · Demande non traitée</td></tr>
       <tr><td><span class="pastille p-orange">A_VERIFIER_BANQUE</span></td><td>IBAN ou BIC reçu par mail</td><td><code>error/</code></td><td>EGESYS : Coordonnées bancaires à confirmer</td></tr>
       <tr><td><span class="pastille p-orange">A_PRECISER</span></td><td>Facture introuvable ou ambiguë</td><td><code>error/</code></td><td>EGESYS : Facture à préciser</td></tr>
@@ -426,19 +532,70 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
     <div class="carte"><h3>Boutons interdits</h3>Supprimer, inverser l'état, transferts comptables et « Envoyer » (facture au client) ne sont jamais cliqués.</div>
     <div class="carte"><h3>Identifiants protégés</h3>Variables d'environnement Windows (<code>EGESYS_IDENTIFIANT</code>, <code>EGESYS_MDP</code>), jamais écrits dans un fichier.</div>
     <div class="carte"><h3>Traçabilité</h3>Note de suivi sur la fiche, journal Excel, rapport détaillé et réponse au demandeur.</div>
+    <div class="carte"><h3>Factures au bon destinataire</h3>Le mail au client part à l'adresse de sa <b>fiche EGESYS</b>, jamais à une adresse lue dans le mail reçu.</div>
+    <div class="carte"><h3>Données dans Microsoft 365</h3>Agent Copilot, OneDrive et Power Automate de l'entreprise, plus le PC : aucun service extérieur.</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="bilan">
+  <h2>Bilan au 20/11/2026</h2>
+  <p class="chapeau">Où en est le projet, ce qu'il apporte, et ce qu'il reste à décider.</p>
+  <div class="grille">
+    <div class="carte">
+      <h3><span class="pastille p-vert">Fait</span> En service</h3>
+      <ul style="margin:0;padding-left:20px">
+        <li>Chaîne complète du mail à la réponse, sans intervention.</li>
+        <li>19 actions : fiche client, règlements, documents, notes, factures.</li>
+        <li>Duplicatas de factures envoyés au demandeur <b>et</b> au client.</li>
+        <li>Plusieurs demandes dans un même mail, enchaînées proprement.</li>
+        <li>Fonctionne sur deux PC (un seul actif à la fois).</li>
+        <li>Nombreux mails de test réels concluants (55 cas prévus).</li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-bleu">Gains</span> Ce que ça apporte</h3>
+      <ul style="margin:0;padding-left:20px">
+        <li>Plus de ressaisie : un mail transféré suffit.</li>
+        <li>Réponse en quelques minutes, avec un compte rendu clair.</li>
+        <li>Moins d'erreurs de frappe : chaque saisie est relue.</li>
+        <li>Historique complet : note sur la fiche, journal Excel.</li>
+        <li>Les cas sensibles (RIB, doute) restent aux humains.</li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-orange">À noter</span> Limites actuelles</h3>
+      <ul style="margin:0;padding-left:20px">
+        <li>Branché sur la <b>base de TEST</b> d'EGESYS.</li>
+        <li>Le PC doit être allumé, session ouverte, OneDrive synchronisé.</li>
+        <li>Les demandes hors des 19 actions restent manuelles.</li>
+        <li>Pas encore de liste d'expéditeurs autorisés.</li>
+      </ul>
+    </div>
+    <div class="carte">
+      <h3><span class="pastille p-violet">Ensuite</span> Prochaines étapes</h3>
+      <ul style="margin:0;padding-left:20px">
+        <li>Feu vert pour passer sur la <b>base de production</b> (une adresse à changer).</li>
+        <li>Validation par le service informatique.</li>
+        <li>Restreindre les expéditeurs autorisés.</li>
+        <li>Nouvelles actions selon les besoins des services.</li>
+      </ul>
+    </div>
   </div>
 </section>
 
 <!-- ============================================================ -->
 <section id="fichiers">
   <h2>À quoi sert chaque fichier</h2>
-  <p class="chapeau">Le projet est dans <code>H:\SOGEN\EGESYS</code>. Cliquez sur un groupe pour le déplier.</p>
+  <p class="chapeau">Le projet est dans <code>OneDrive - Sogen\SOGEN\EGESYS</code> (synchronisé sur les deux PC). Cliquez sur un groupe pour le déplier.</p>
 
   <details open>
-    <summary>Automatisation (le workflow)<span class="compte">4 fichiers</span></summary>
+    <summary>Automatisation (le workflow)<span class="compte">6 fichiers</span></summary>
     <div class="contenu">
       <div class="fichier"><div class="nom"><code>workflow/workflow.py</code></div><div><p>Le chef d'orchestre : surveille <code>pending/</code>, attend synchro et pièces jointes, valide, applique le garde-fou bancaire, lance l'exécution, range dans <code>completed/</code> ou <code>error/</code>, écrit la réponse dans <code>result/</code>, notifie sur le bureau.</p><div class="usage">Lancé par <code>lancer_workflow.bat</code> ou <code>python workflow\workflow.py</code></div></div></div>
       <div class="fichier"><div class="nom"><code>workflow/compte_rendu.py</code></div><div><p>Rédige la réponse au mail : objet selon le résultat et corps HTML mis en forme pour Outlook ; traduit les messages techniques en français clair.</p><div class="usage">Appelé par le workflow</div></div></div>
+      <div class="fichier"><div class="nom"><code>workflow/poste_actif.py</code></div><div><p>Garantit qu'un seul des deux PC traite les mails (fichier <code>_poste_actif.json</code> dans OneDrive, signe de vie chaque minute).</p><div class="usage">Copie identique de celui de G++</div></div></div>
+      <div class="fichier"><div class="nom"><code>config_egesys.py</code></div><div><p>Tous les emplacements : dossier OneDrive EGESYS (trouvé automatiquement sur chaque PC), journal Excel, dossier technique local.</p></div></div>
       <div class="fichier"><div class="nom"><code>lancer_workflow.bat</code></div><div><p>Point d'entrée Windows (double-clic) : appelle le script PowerShell avec les options.</p><div class="usage"><code>-Identifiants</code>, <code>-Installer</code>, <code>-Desinstaller</code>, <code>-Etat</code>, <code>-Arreter</code></div></div></div>
       <div class="fichier"><div class="nom"><code>lancer_workflow.ps1</code></div><div><p>Enregistre les identifiants (saisie masquée), lance le workflow en arrière-plan (une seule instance, journal <code>workflow.log</code>), installe le démarrage automatique, donne l'état, arrête.</p><div class="usage">À garder encodé en UTF-8 avec BOM</div></div></div>
     </div>
@@ -466,9 +623,10 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
   </details>
 
   <details>
-    <summary>Tests de l'agent<span class="compte">3 éléments</span></summary>
+    <summary>Tests de l'agent<span class="compte">4 éléments</span></summary>
     <div class="contenu">
-      <div class="fichier"><div class="nom"><code>copilot/tests/mails_de_test.md</code></div><div><p>26 mails de test couvrant les actions, les pièges et les cas d'incertitude, avec le résultat attendu.</p></div></div>
+      <div class="fichier"><div class="nom"><code>copilot/tests/mails_de_test.md</code></div><div><p>55 mails de test couvrant les actions, les pièges et les cas d'incertitude, avec le résultat attendu (tous sur le client de test 64233008).</p></div></div>
+      <div class="fichier"><div class="nom"><code>envoyer_mails_test.py</code></div><div><p>Transforme les mails de test en vrais mails : dépôt dans <code>OneDrive - Sogen\TESTS_MAILS</code>, d'où Power Automate les envoie et déclenche toute la chaîne.</p><div class="usage"><code>python envoyer_mails_test.py 47-55</code> · <code>--liste</code> · <code>--tous</code></div></div></div>
       <div class="fichier"><div class="nom"><code>copilot/tests/attendus/</code></div><div><p>La réponse JSON attendue pour chaque mail de test (<code>"*"</code> = texte libre accepté).</p></div></div>
       <div class="fichier"><div class="nom"><code>comparer_reponse_copilot.py</code></div><div><p>Compare une réponse de l'agent à la réponse attendue (sans tenir compte de la casse, des accents et des espaces).</p><div class="usage"><code>python comparer_reponse_copilot.py copilot/tests/attendus/test_05.json reponse.txt</code></div></div></div>
     </div>
@@ -507,7 +665,7 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
 <!-- ============================================================ -->
 <section id="exploitation">
   <h2>Exploitation au quotidien</h2>
-  <p class="chapeau">Toutes les commandes se lancent dans PowerShell, depuis <code>H:\SOGEN\EGESYS</code>.</p>
+  <p class="chapeau">Toutes les commandes se lancent dans PowerShell, depuis le dossier <code>SOGEN\EGESYS</code> du OneDrive.</p>
   <div class="defile">
   <table class="tableau">
     <thead><tr><th>Pour…</th><th>Commande</th></tr></thead>
@@ -522,6 +680,7 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
       <tr><td>Exécuter à la main un mail bloqué, après vérification</td><td><code>python script_egesys.py "…\error\&lt;nom&gt;_valide.json"</code></td></tr>
       <tr><td>Vider le OneDrive (completed, error, result, result\pdf)</td><td><code>python nettoyer_onedrive.py</code> (option <code>--jours 30</code> pour garder le dernier mois)</td></tr>
       <tr><td>Régénérer la compétence de l'agent</td><td><code>python generer_doc_copilot.py</code></td></tr>
+      <tr><td>Envoyer des mails de test (vraie exécution)</td><td><code>python envoyer_mails_test.py 47-55</code></td></tr>
     </tbody>
   </table>
   </div>
@@ -543,12 +702,12 @@ footer { color: var(--doux); font-size: 13px; text-align: center; padding: 30px 
 
 </main>
 
-<footer>Automatisation EGESYS · SOGEN · Python <code>requests</code> + BeautifulSoup, Microsoft 365 (Copilot, Power Automate, OneDrive)</footer>
+<footer>Automatisation EGESYS · SOGEN · mise à jour le 20/11/2026 · Python <code>requests</code> + BeautifulSoup, Microsoft 365 (Copilot, Power Automate, OneDrive) · <a href="../G++/presentation_projet.html">voir aussi le projet G++</a></footer>
 
 <script>
 // Surligne dans le menu la section en cours de lecture
 (function () {
-  var liens = document.querySelectorAll('nav a');
+  var liens = document.querySelectorAll('nav a[href^="#"]');
   var sections = Array.prototype.map.call(liens, function (a) { return document.querySelector(a.getAttribute('href')); });
   function maj() {
     var courant = 0;

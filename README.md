@@ -5,6 +5,9 @@ Deux automatisations par mail, chacune dans son dossier :
 - [EGESYS/](EGESYS/README.md) : met à jour la base clients EGESYS ;
 - [G++/](G++/README.md) : pilote le logiciel GENICIA++.
 
+Pour présenter le projet : ouvrir dans un navigateur [EGESYS/presentation_projet.html](EGESYS/presentation_projet.html)
+et [G++/presentation_projet.html](G++/presentation_projet.html) (un lien en haut de chaque page mène à l'autre).
+
 ## Travailler sur deux PC
 
 **Le code est synchronisé par OneDrive.** Ce dossier `SOGEN` est dans OneDrive : une modification faite sur un PC

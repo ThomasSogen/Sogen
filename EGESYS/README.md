@@ -114,8 +114,20 @@ les écrire.
 - **Aucune** ou **plusieurs** factures → rien n'est téléchargé ; le rapport liste les factures candidates (numéro, dates,
   montant) pour préciser la demande.
 - Aucun critère dans le mail → la facture validée la plus récente du client.
+- **Jour inconnu** (« sa facture de mars 2019 », « de 2018 », « du 1er trimestre ») : l'agent met la période dans
+  la date de la facture (« 01/03/2019 au 31/03/2019 »), **sans incertitude**. Toutes les factures validées de la
+  période sont téléchargées : une seule → envoi normal ; **plusieurs → toutes envoyées**, objet « Demande traitée,
+  plusieurs factures trouvées », et le mail au client le dit ; aucune → « Facture à préciser » (factures les plus
+  proches). Si le mail donne aussi un montant ou une date d'état, la période sert seulement de filtre (une seule
+  facture doit correspondre).
 
-**Plusieurs factures (dates et/ou périodes)** — champ `periodes` (obligatoire) du dossier `factures` : chaque date ou
+**N dernières factures** — champ `nombre_dernieres` (1 à 30) : « ses 3 dernières factures » → `"3"`, sans date. Le
+programme prend les 3 premières lignes du tableau des factures (de la plus récente à la plus ancienne), sur tout
+l'historique ; avec une période (« les 2 dernières de 2017 »), seulement dans cette période. S'il y en a moins que
+demandé, toutes sont envoyées et la réponse (comme le mail au client) le dit. « Ses dernières factures » sans nombre →
+incertitude (combien ?).
+
+**Plusieurs factures (dates et/ou périodes)** — champ `periodes` (obligatoire, sauf si `nombre_dernieres` est donné) du dossier `factures` : chaque date ou
 période séparée par « ; », une date précise = `JJ/MM/AAAA`, une période = `JJ/MM/AAAA au JJ/MM/AAAA` (bornes incluses,
 sur la date de facture). Ex. : « la facture du 31/01 et toutes celles de mars 2026 » → `"31/01/2026 ; 01/03/2026 au
 31/03/2026"` (l'ancien format `periode_du` / `periode_au` est encore accepté et converti) :
@@ -183,6 +195,7 @@ Pour chaque `pending/<nom>.json` :
 | Résultat | Code | Dossier | Exécuté dans EGESYS ? |
 |---|---|---|---|
 | Tout est correct | `EXECUTE` | `completed/` | Oui |
+| Une facture demandée sur une période, plusieurs trouvées | `EXECUTE` | `completed/` | Oui : toutes envoyées (objet « Demande traitée, plusieurs factures trouvées ») |
 | Factures à plusieurs dates : certaines dates sans facture | `EXECUTE` | `completed/` | Oui : les factures trouvées sont envoyées (objet « Demande traitée, factures manquantes ») |
 | Factures à plusieurs dates : aucune facture à aucune date | `A_PRECISER` | `error/` | Non (détail date par date) |
 | Incertitude de l'agent ou ordre refusé par la validation | `REFUSE_VALIDATION` | `error/` | Non |
@@ -303,7 +316,7 @@ Le PC doit être allumé, OneDrive synchronisé et le workflow lancé pour que l
 | [workflow/poste_actif.py](workflow/poste_actif.py) | Un seul PC à la fois (fichier `_poste_actif.json` dans le OneDrive EGESYS). Identique à celui de G++ |
 | [extraire_ordres.py](extraire_ordres.py) | Schéma des ordres (utilisé par la validation et la compétence) ; extraction par l'API Claude en option |
 | [generer_doc_copilot.py](generer_doc_copilot.py) | Génère la compétence SKILL.md de l'agent |
-| [copilot/](copilot/) | Instructions de l'agent, compétence générée, exemples, 55 mails de test et réponses attendues (n° 19 à 22, 25, 27 et 28 à 55 : factures, filtres, plusieurs dates et périodes, dates sans facture, N dernières factures) |
+| [copilot/](copilot/) | Instructions de l'agent, compétence générée, exemples, 59 mails de test et réponses attendues (n° 19 à 22, 25, 27 et 28 à 59 : factures, filtres, plusieurs dates et périodes, dates sans facture, N dernières factures, une facture sur une période (56-59)) |
 | [comparer_reponse_copilot.py](comparer_reponse_copilot.py) | Compare une réponse de l'agent à la réponse attendue d'un mail de test |
 | [explorer.py](explorer.py) | Cartographie des pages EGESYS en lecture seule → [cartes/](cartes/) |
 | [envoyer_mails_test.py](envoyer_mails_test.py) | Mails de test : génère `copilot/tests/mails_json/test_XX.json` depuis `mails_de_test.md` et les dépose dans `OneDrive - Sogen\TESTS_MAILS`, d'où un flux Power Automate les envoie (objet `[EGSYS] [TEST XX] …`) |
@@ -329,7 +342,19 @@ bloque la création de l'agent (« violation IAR »). Les exemples utilisent des
 
 ## Plusieurs ordres dans un même mail
 
-Entre deux ordres, le programme revient toujours à l'accueil (Tableau de bord) avant d'exécuter l'ordre suivant :
-flèche « retour » des sous-pages (fiche client, note, document), puis « page précédente » des pages de menu. Sans ce
-retour, un ordre de factures lancé juste après une modification restait bloqué sur la fiche client (constaté le
-19/11/2026 avec le test 48). Si l'accueil n'est pas atteint en 15 clics, l'ordre s'arrête sans rien faire.
+Entre deux ordres, le programme revient toujours à l'accueil (Tableau de bord) avant d'exécuter l'ordre suivant,
+comme le ferait l'utilisateur :
+
+1. sur la fiche client : « Enregistrer » (A4), puis la flèche « retour » (A3) si la fiche est toujours affichée ;
+2. la « maison » (A2) jusqu'au Tableau de bord, en envoyant toute la page comme un navigateur ;
+3. si la maison reste sans effet 2 fois : déconnexion puis reconnexion (on arrive toujours sur le Tableau de bord).
+
+Sans ce retour, un ordre de factures lancé juste après une modification restait bloqué sur la fiche client (constaté
+le 19/11/2026 avec le test 48). Si l'accueil n'est toujours pas atteint, l'ordre s'arrête sans rien faire et la
+réponse le dit.
+
+## État au 20/11/2026
+
+En service sur la **base de TEST**. Les mails de test (55, tous sur le client de test 64233008) ont été passés par
+l'utilisateur avec succès, y compris les N dernières factures et les mails à plusieurs ordres (modification puis
+factures). Présentation illustrée pour la direction : [presentation_projet.html](presentation_projet.html).

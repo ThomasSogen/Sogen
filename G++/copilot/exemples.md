@@ -36,6 +36,39 @@ Points d'attention :
 }
 ```
 
+## Exemple 1 bis : une facture sans le jour (seulement le mois)
+
+ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX11`
+Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
+
+Mail reçu :
+
+> Objet : G++ facture
+>
+> Bonjour, l'éleveur 12345678 me demande sa facture de mars 2026, il ne connaît pas la date exacte.
+
+Points d'attention :
+- UNE facture demandée, sans le jour : "telecharger_facture" avec la période du mois dans "date_facture".
+- Ce n'est pas une incertitude : s'il y a plusieurs factures en mars, le programme les envoie toutes.
+
+```json
+{
+  "resume": "Duplicata de la facture de mars 2026 du cheptel 12345678.",
+  "id_message": "AAMkXXXXXXXXXXXX11",
+  "expediteur": "gestionnaire@exemple.fr",
+  "ordres": [
+    {
+      "action": "telecharger_facture",
+      "justification": "l'éleveur 12345678 me demande sa facture de mars 2026",
+      "cheptel": "12345678",
+      "nom_eleveur": "",
+      "date_facture": "01/03/2026 au 31/03/2026"
+    }
+  ],
+  "incertitudes": []
+}
+```
+
 ## Exemple 2 : création d'un espace adhérent web
 
 ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX02`

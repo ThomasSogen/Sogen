@@ -10,7 +10,7 @@ python comparer_reponse_copilot.py copilot/tests/attendus/test_XX.json reponses/
 Tous les tests visent le client de test **64233008** (désigné par son code client ; test 13 : client volontairement
 non identifiable). Factures du client (dates exactes) : 09/02/2016, 17/08/2016, 05/09/2016, 30/09/2016, 01/03/2017,
 07/04/2017, 30/09/2017, 18/12/2017, 21/12/2017, 20/03/2018, 30/09/2018, 31/01/2019, 31/03/2019.
-Tests factures : 19 à 22, 25, 27 et 28 à 49 (une facture, filtres, plusieurs dates et périodes, dates sans facture).
+Tests factures : 19 à 22, 25, 27 et 28 à 59 (une facture, filtres, plusieurs dates et périodes, dates sans facture, N dernières factures, une facture sur une période : 56-59).
 Les coordonnées et IBAN sont fictifs.
 Colonne « Vérifie » : ce que le test contrôle chez l'agent.
 
@@ -62,9 +62,19 @@ Colonne « Vérifie » : ce que le test contrôle chez l'agent.
 | 44 | « Numéro d'élevage » = code client | code_client rempli à partir du n° d'élevage |
 | 45 | Cheptel au format « FR » | « cheptel FR 64 233 008 » → 64233008 ; deux dates |
 | 46 | Date dans le futur | l'agent recopie la date ; c'est le validateur qui refuse |
-| 47 | Plusieurs factures sans date claire | « periodes » vide + incertitude |
+| 47 | Deux dernières factures | « nombre_dernieres » = "2", aucune incertitude |
 | 48 | Factures + autre modification | deux ordres dans le même mail |
 | 49 | Deux dates très proches | deux dates précises (comparer avec le test 30) |
+| 50 | Trois dernières factures | « nombre_dernieres » = "3" |
+| 51 | Dernières factures écrites en lettres | « cinq dernières » → "5" |
+| 52 | Deux dernières factures d'une année | "2" + periodes 2017 |
+| 53 | Plus de factures demandées qu'il n'en existe | "20" ; le script envoie les 13 |
+| 54 | Dernières factures sans nombre | champs vides + incertitude |
+| 55 | Modification puis dernières factures | deux ordres, retour au Tableau de bord entre les deux |
+| 56 | Une facture d'une année | « sa facture de 2018 » → `telecharger_facture_client`, date_realisation "01/01/2018 au 31/12/2018", aucune incertitude |
+| 57 | Une facture d'un trimestre | « la facture du 1er trimestre 2019 » → "01/01/2019 au 31/03/2019", aucune incertitude |
+| 58 | Une facture d'un mois, une seule | « sa facture de septembre 2018 » → "01/09/2018 au 30/09/2018" |
+| 59 | Une facture d'un mois sans facture | « sa facture de juin 2018 » → "01/06/2018 au 30/06/2018" |
 
 ---
 
@@ -850,8 +860,65 @@ la réponse et dans le mail au client.*
 
 > Bonjour,
 >
-> Le client 64233008 a un nouveau téléphone fixe : 05 59 12 34 56. Merci de lui envoyer aussi ses 2 dernières factures.
+> Le client 64233008 a un nouveau téléphone fixe : 0123456789. Merci de lui envoyer aussi ses 2 dernières factures.
 >
 > Merci
 
 *Attendu côté Copilot : « modifier_telephone_fixe_client » + « telecharger_factures_client » nombre_dernieres « 2 », aucune incertitude. Attendu côté script : téléphone fixe modifié (+ note de suivi), retour à l'accueil (Tableau de bord), puis 2 PDF : 31/03/2019 et 31/01/2019.*
+
+---
+
+## Test 56 — Une facture d'une année
+
+**De :** accueil@exemple.fr — **Objet :** Facture 2018 - client 64233008
+
+> Bonjour,
+>
+> Le client 64233008 voudrait un duplicata de sa facture de 2018, il ne se souvient plus de la date.
+>
+> Merci
+
+*Attendu côté Copilot : « telecharger_facture_client » date_realisation « 01/01/2018 au 31/12/2018 », aucune incertitude. Attendu côté script : 2 factures trouvées (20/03 et 30/09/2018) : les 2 PDF sont envoyés, objet « Demande traitée, plusieurs factures trouvées ».*
+
+---
+
+## Test 57 — Une facture d'un trimestre
+
+**De :** accueil@exemple.fr — **Objet :** Facture 1er trimestre 2019 - client 64233008
+
+> Bonjour,
+>
+> Pouvez-vous envoyer au client 64233008 la facture du 1er trimestre 2019 ?
+>
+> Merci
+
+*Attendu côté Copilot : « telecharger_facture_client » date_realisation « 01/01/2019 au 31/03/2019 », aucune incertitude. Attendu côté script : 2 factures (31/01 et 31/03/2019), toutes envoyées avec le message « plusieurs factures trouvées ».*
+
+---
+
+## Test 58 — Une facture d'un mois, une seule
+
+**De :** accueil@exemple.fr — **Objet :** Facture septembre 2018 - client 64233008
+
+> Bonjour,
+>
+> Le client 64233008 a besoin de sa facture de septembre 2018.
+>
+> Merci
+
+*Attendu côté Copilot : « telecharger_facture_client » date_realisation « 01/09/2018 au 30/09/2018 », aucune incertitude. Attendu côté script : 1 PDF : 30/09/2018, objet « Demande traitée ».*
+
+---
+
+## Test 59 — Une facture d'un mois sans facture
+
+**De :** accueil@exemple.fr — **Objet :** Facture juin 2018 - client 64233008
+
+> Bonjour,
+>
+> Le client 64233008 demande sa facture de juin 2018.
+>
+> Merci
+
+*Attendu côté Copilot : « telecharger_facture_client » date_realisation « 01/06/2018 au 30/06/2018 », aucune incertitude. Attendu côté script : aucune facture : rien n'est téléchargé, réponse « Facture à préciser » avec les factures les plus proches.*
+

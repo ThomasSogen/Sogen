@@ -672,7 +672,12 @@ def plages_recherche_facture(facture):
     for champ in ("date_realisation", "date_etat"):
         valeur = facture.get(champ, "").strip()
         du = au = ""
-        if valeur:
+        if valeur and " au " in valeur:   # jour inconnu (« sa facture de mars ») : la période exacte, sans marge
+            periodes = lire_periodes_ou_arret(valeur)
+            if len(periodes) != 1:
+                sys.exit(f"🛑 ERREUR : '{valeur}' ({champ}) : une seule date ou une seule période attendue.")
+            du, au = (jour.strftime("%d/%m/%Y") for jour in periodes[0])
+        elif valeur:
             try:
                 jour = datetime.strptime(valeur, "%d/%m/%Y")
             except ValueError:
@@ -694,6 +699,20 @@ def plages_recherche_facture(facture):
     if plages["numero_facture"] and not plages["numero_facture"].isdigit():
         sys.exit(f"🛑 ERREUR : Le numéro de facture '{facture['numero_facture']}' doit être composé de chiffres.")
     return plages
+
+def facture_sur_periode(ordre):
+    """UNE facture demandée sans le jour (« sa facture de mars 2026 ») : "date_realisation" = « JJ/MM/AAAA au
+    JJ/MM/AAAA » et aucun autre critère → ordre « plusieurs factures » équivalent : toutes les factures validées de la
+    période sont téléchargées (le compte rendu signale qu'il y en avait plusieurs). Sinon None (recette habituelle)."""
+    if ordre.get("action") != "telecharger_facture_client":
+        return None
+    facture = ordre.get("facture") or {}
+    periode = str(facture.get("date_realisation", "")).strip()
+    if " au " not in periode or any(str(facture.get(c, "")).strip() for c in ("numero_facture", "date_etat", "montant")):
+        return None
+    converti = {cle: copy.deepcopy(valeur) for cle, valeur in ordre.items() if cle != "facture"}
+    converti.update(action="telecharger_factures_client", factures={"periodes": periode, "nombre_dernieres": ""})
+    return converti
 
 def controler_periode(factures):
     """Période d'une demande de plusieurs factures : deux dates JJ/MM/AAAA obligatoires, début ≤ fin."""
@@ -1595,6 +1614,12 @@ if __name__ == "__main__":
     try:
         for numero, ordre in enumerate(ordres, start=1):
             print(f"\n==================== ORDRE {numero}/{len(ordres)} ====================")
+            sur_periode = facture_sur_periode(ordre)   # une facture sans le jour : toutes celles de la période
+            if sur_periode:
+                periode_facture = " ; ".join(f"du {du:%d/%m/%Y} au {au:%d/%m/%Y}" if du != au else f"le {du:%d/%m/%Y}"
+                                             for du, au in lire_periodes_ou_arret(sur_periode["factures"]["periodes"]))
+                print(f"ℹ️ Facture demandée sans le jour : recherche de toutes les factures validées {periode_facture}.")
+                ordre = sur_periode
             ordre_original = copy.deepcopy(ordre)  # preparer_donnees traduit l'ordre sur place
             suivi.lignes.clear(); suivi.texte = ""
             etape_en_cours = "exécution"
@@ -1619,6 +1644,11 @@ if __name__ == "__main__":
                         + [f"Non trouvée : {m['periode']} : {m['raison']}" for m in manquantes])
                 if manquantes:
                     resultats[numero - 1]["manquantes"] = manquantes
+                if sur_periode and len(fichiers_ordre) > 1:   # une facture demandée, plusieurs trouvées : toutes
+                    modification = (f"Plusieurs factures trouvées {periode_facture} : les {len(fichiers_ordre)} "
+                                    f"sont envoyées\n{modification}")
+                    resultats[numero - 1].update(plusieurs_trouvees=True, periode_facture=periode_facture)
+                    print(f"ℹ️ {len(fichiers_ordre)} factures trouvées {periode_facture} : toutes sont envoyées.")
                 detail = ""
                 note = note_de_suivi(ordre_original, etat.get('anciennes_valeurs', {}), fichiers_ordre)
                 etat['lectures'] = {}  # Adresse mail lue sur la fiche pendant la note de suivi (factures)

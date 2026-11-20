@@ -52,11 +52,11 @@ contient de vraies données clients).
 ### Agent Copilot (no-code, côté Microsoft 365)
 | Fichier | Rôle |
 |---|---|
-| `copilot/instructions.md` | **À coller dans les instructions de l'agent.** ~7,3k caractères (limite Copilot ≈ 8k : raccourcir avant d'ajouter). Rôle, format de réponse (JSON brut, 5 clés : resume, id_message, expediteur, ordres, incertitudes), règles de construction, choix de l'action. |
+| `copilot/instructions.md` | **À coller dans les instructions de l'agent.** ~7,7k caractères (limite Copilot ≈ 8k : raccourcir avant d'ajouter). Rôle, format de réponse (JSON brut, 5 clés : resume, id_message, expediteur, ordres, incertitudes), règles de construction, choix de l'action. |
 | `copilot/egesys-modeles-json/SKILL.md` | **Compétence de l'agent, à charger comme fichier.** GÉNÉRÉ par `generer_doc_copilot.py` — ne pas éditer à la main. |
 | `generer_doc_copilot.py` | Génère le SKILL.md depuis `CATALOGUE_ACTIONS` + `MAPPING_*` + `copilot/exemples_egesys.md`. À relancer après toute évolution. |
 | `copilot/exemples_egesys.md` | Exemples de mails traités (données fictives). Repris dans le SKILL.md. |
-| `copilot/tests/mails_de_test.md` | 55 mails de test + résultat attendu (côté agent ET côté script) décrit sous chacun, tous sur le client 64233008 ; factures : 19-22, 25, 27-55 (47 et 50-55 : N dernières factures ; 48 et 55 : modification puis factures). |
+| `copilot/tests/mails_de_test.md` | 59 mails de test (56-59 : une facture sur une période) + résultat attendu (côté agent ET côté script) décrit sous chacun, tous sur le client 64233008 ; factures : 19-22, 25, 27-55 (47 et 50-55 : N dernières factures ; 48 et 55 : modification puis factures). |
 | `copilot/tests/attendus/test_01..55.json` | Réponses attendues (`"*"` = texte libre accepté). `copilot/tests/mails_json/` : les mêmes mails, prêts à envoyer. |
 | `comparer_reponse_copilot.py` | Compare une réponse d'agent à l'attendu (ignore casse/accents/espaces). |
 
@@ -101,6 +101,14 @@ Client désigné par `nom_client`, `code_client` (7-8 chiffres) ou les deux.
   « Dt Fac » décroissante) ; sans `periodes`, recherche du 01/01/2000 à aujourd'hui. Moins de N trouvées → entrée
   `manquantes` avec `nombre_demande`. Champ obligatoire : `periodes` OU `nombre_dernieres` (tuple dans
   `CHAMPS_OBLIGATOIRES`). « Sa dernière facture » (une seule) reste `telecharger_facture_client` sans critère.
+  **Une facture sans le jour** (20/11/2026) : `facture.date_realisation` = « JJ/MM/AAAA au JJ/MM/AAAA »
+  (`plages_recherche_facture` prend alors les bornes exactes, sans ± 3 j). Sans autre critère (n°, date d'état,
+  montant), `facture_sur_periode` convertit l'ordre, au début de la boucle de `__main__`, en
+  `telecharger_factures_client` sur cette période ; plusieurs PDF → résultat `plusieurs_trouvees` + `periode_facture`
+  → `compte_rendu` : objet « Demande traitée, plusieurs factures trouvées », motif, phrase dans `mail_client`. Journal
+  Excel et note de suivi au nom de l'action convertie. Tests 56-59. Testé hors connexion seulement.
+  ⚠ Redémarrer le workflow après une modification de `workflow/compte_rendu.py` ou `valider_ordres.py` (importés une
+  fois au démarrage) ; `script_egesys.py` et la validation complète sont relancés à chaque mail.
 - Désactivée : `modifier_activite_client` (dans `ACTIONS_DESACTIVEES`).
 
 ---
@@ -239,7 +247,16 @@ Client désigné par `nom_client`, `code_client` (7-8 chiffres) ou les deux.
 
 ---
 
-## 10. État au 2026-11-19
+## 10. État au 2026-11-20
+
+- L'utilisateur a passé de nombreux mails de test en réel (base de TEST, client 64233008) : « tout a l'air de
+  fonctionner ». Comprend les N dernières factures (tests 47, 50-55) et le retour au Tableau de bord entre deux ordres
+  (tests 48, 55 : Enregistrer A4 → A3 → A2 avec formulaire complet → reconnexion en dernier recours).
+- `copilot/instructions.md` ≈ 7,7k caractères : presque à la limite de Copilot (8k), raccourcir avant d'ajouter une règle.
+- `presentation_projet.html` mis à jour pour une présentation à la direction (sections « Exemples » et « Bilan »).
+  Le projet voisin G++ a sa propre page, sur le même modèle.
+
+### État au 2026-11-19
 
 - **Base de TEST** depuis le 17/11/2026 (`moteur_egesys.connexion_egesys`, `?p1=TEST`) ; production = `http://egesys.sogen.coop/eGESYS`.
 - Mail au client avec ses factures (17/11) : testé en réel par l'utilisateur.

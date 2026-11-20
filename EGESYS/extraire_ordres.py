@@ -56,7 +56,9 @@ ACTIONS_DESCRIPTIONS = {
     "modifier_note_client": "Modifier une note existante, identifiée par son sujet (et sa date si connue).",
     "supprimer_note_client": "Supprimer une note existante, identifiée par son sujet (et sa date si connue).",
     "telecharger_facture_client": "Enregistrer le duplicata PDF d'UNE facture validée du client (aucune modification "
-                                  "dans EGESYS). Sans critère de facture : la plus récente.",
+                                  "dans EGESYS). Sans critère de facture : la plus récente. Jour inconnu : la "
+                                  "période dans \"date_realisation\" ; plusieurs factures dans la période : toutes "
+                                  "sont envoyées, avec un message qui le signale.",
     "telecharger_factures_client": "Enregistrer le duplicata PDF de PLUSIEURS factures validées du client : toutes "
                                    "celles de une ou plusieurs dates précises et/ou périodes (ex : un mois, un "
                                    "trimestre, une année ; 30 factures maximum), ou les N dernières factures "
@@ -104,7 +106,9 @@ CHAMPS = {
     "chemin": ("document", "Nom EXACT de la pièce jointe à ajouter comme document (pdf, doc, docx, xls, xlsx)."),
     "famille": ("document", "Famille du document : CONTRATS pour un contrat ou un mandat signé, sinon DOCUMENTS SOGEN."),
     "numero_facture": ("facture", "Numéro de facture complet (13 chiffres, ex : 4500000012345) s'il est cité, sinon vide."),
-    "date_realisation": ("facture", "Date de réalisation (date) de la facture JJ/MM/AAAA, même approximative."),
+    "date_realisation": ("facture", "Date de réalisation (date) de la facture JJ/MM/AAAA, même approximative. Si le "
+                                    "mail ne donne pas le jour : la période, JJ/MM/AAAA au JJ/MM/AAAA (ex : « sa "
+                                    "facture de mars 2026 » → \"01/03/2026 au 31/03/2026\")."),
     "date_etat": ("facture", "Date d'état (validation) de la facture JJ/MM/AAAA, même approximative."),
     "montant": ("facture", "Montant TTC de la facture (ex : 652,49), même approximatif."),
     "periodes": ("factures", "Dates et/ou périodes des factures demandées, séparées par « ; ». Une date précise : "

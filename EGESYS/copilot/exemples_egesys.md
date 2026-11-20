@@ -192,6 +192,42 @@ Points d'attention :
 }
 ```
 
+## Exemple 4 bis : une facture sans le jour (seulement le mois)
+
+ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX08`
+Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
+
+Mail reçu :
+
+> Bonjour, le client 1234567 voudrait sa facture de février 2026, il n'a pas la date exacte. Merci.
+
+Points d'attention :
+- UNE facture demandée, sans le jour : la période du mois dans "date_realisation".
+- Ce n'est pas une incertitude : s'il y a plusieurs factures en février, le programme les envoie toutes.
+
+```json
+{
+  "resume": "Duplicata de la facture de février 2026 du client 1234567.",
+  "id_message": "AAMkXXXXXXXXXXXX08",
+  "expediteur": "gestionnaire@exemple.fr",
+  "ordres": [
+    {
+      "action": "telecharger_facture_client",
+      "justification": "le client 1234567 voudrait sa facture de février 2026",
+      "code_client": "1234567",
+      "nom_client": "",
+      "facture": {
+        "date_etat": "",
+        "date_realisation": "01/02/2026 au 28/02/2026",
+        "montant": "",
+        "numero_facture": ""
+      }
+    }
+  ],
+  "incertitudes": []
+}
+```
+
 ## Exemple 5 : duplicatas des factures d'un mois et d'une date précise
 
 ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX06`
