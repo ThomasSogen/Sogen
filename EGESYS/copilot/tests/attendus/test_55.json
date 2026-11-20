@@ -1,0 +1,25 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "modifier_telephone_fixe_client",
+      "justification": "*",
+      "code_client": "64233008",
+      "nom_client": "",
+      "nouvelle_valeur_client": {
+        "telephone_fixe": "0559123456"
+      }
+    },
+    {
+      "action": "telecharger_factures_client",
+      "justification": "*",
+      "code_client": "64233008",
+      "nom_client": "",
+      "factures": {
+        "nombre_dernieres": "2",
+        "periodes": ""
+      }
+    }
+  ],
+  "incertitudes": []
+}

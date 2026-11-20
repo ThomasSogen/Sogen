@@ -1,5 +1,5 @@
 {
   "destinataire": "thomas.gineste@sogen.coop",
-  "objet": "[EGSYS] [TEST 23] Changement de titulaire Guitton",
-  "corps": "<p>Bonjour,</p><p>Mme Anne Marie Guitton prend sa retraite : c'est désormais son fils, M. Paul Guitton, qui reprend l'exploitation.<br>Merci de mettre la fiche client à son nom.</p><p>Bonne journée</p>"
+  "objet": "[EGSYS] [TEST 23] Changement de titulaire 64233008",
+  "corps": "<p>Bonjour,</p><p>Le titulaire du client 64233008 prend sa retraite : c'est désormais son fils, Paul, qui reprend l'exploitation<br>(même nom de famille). Merci de mettre la fiche client à son prénom.</p><p>Bonne journée</p>"
 }

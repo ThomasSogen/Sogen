@@ -4,17 +4,17 @@
     {
       "action": "modifier_mail_comptable_client",
       "justification": "*",
-      "code_client": "",
-      "nom_client": "guitton",
+      "code_client": "64233008",
+      "nom_client": "",
       "nouvelle_valeur_client": {
-        "mail_comptable": "compta.guitton@exemple.fr"
+        "mail_comptable": "compta.eleveur@exemple.fr"
       }
     },
     {
       "action": "modifier_telephone_fixe_client",
       "justification": "*",
-      "code_client": "",
-      "nom_client": "guitton",
+      "code_client": "64233008",
+      "nom_client": "",
       "nouvelle_valeur_client": {
         "telephone_fixe": "0559123456"
       }

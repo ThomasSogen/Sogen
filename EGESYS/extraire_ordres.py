@@ -57,9 +57,12 @@ ACTIONS_DESCRIPTIONS = {
     "supprimer_note_client": "Supprimer une note existante, identifiée par son sujet (et sa date si connue).",
     "telecharger_facture_client": "Enregistrer le duplicata PDF d'UNE facture validée du client (aucune modification "
                                   "dans EGESYS). Sans critère de facture : la plus récente.",
-    "telecharger_factures_client": "Enregistrer le duplicata PDF de TOUTES les factures validées du client sur une "
-                                   "période (ex : un mois, un trimestre, une année ; 30 factures maximum). Aucune "
-                                   "modification dans EGESYS.",
+    "telecharger_factures_client": "Enregistrer le duplicata PDF de PLUSIEURS factures validées du client : toutes "
+                                   "celles de une ou plusieurs dates précises et/ou périodes (ex : un mois, un "
+                                   "trimestre, une année ; 30 factures maximum), ou les N dernières factures "
+                                   "(« ses 3 dernières factures »). Une date ou une période sans facture "
+                                   "n'arrête pas la demande : les factures trouvées sont envoyées et les manques "
+                                   "expliqués. Aucune modification dans EGESYS.",
 }
 
 # Variable de recette → (sous-dossier de l'ordre, description pour le modèle). None = à la racine de l'ordre.
@@ -104,8 +107,17 @@ CHAMPS = {
     "date_realisation": ("facture", "Date de réalisation (date) de la facture JJ/MM/AAAA, même approximative."),
     "date_etat": ("facture", "Date d'état (validation) de la facture JJ/MM/AAAA, même approximative."),
     "montant": ("facture", "Montant TTC de la facture (ex : 652,49), même approximatif."),
-    "periode_du": ("factures", "Premier jour de la période des factures demandées, JJ/MM/AAAA (ex : mars 2026 → 01/03/2026)."),
-    "periode_au": ("factures", "Dernier jour de la période des factures demandées, JJ/MM/AAAA (ex : mars 2026 → 31/03/2026)."),
+    "periodes": ("factures", "Dates et/ou périodes des factures demandées, séparées par « ; ». Une date précise : "
+                             "JJ/MM/AAAA ; une période : JJ/MM/AAAA au JJ/MM/AAAA (premier et dernier jour inclus). "
+                             "Ex : « la facture du 31 janvier et celles de mars 2026 » → "
+                             "\"31/01/2026 ; 01/03/2026 au 31/03/2026\"."),
+    "nombre_dernieres": ("factures", "Nombre des dernières factures demandées, en chiffres (« ses 3 dernières "
+                                     "factures » → \"3\"), sinon vide. Seules les "
+                                     "plus récentes sont prises (parmi les dates de \"periodes\" si elles sont "
+                                     "données, sinon parmi toutes les factures du client)."),
+    # Recette interne lister_factures_client (une période à la fois, jamais remplie par l'agent)
+    "periode_du": ("factures", "Premier jour de la période recherchée, JJ/MM/AAAA."),
+    "periode_au": ("factures", "Dernier jour de la période recherchée, JJ/MM/AAAA."),
 }
 
 # Variables de recette calculées par script_egesys.preparer_donnees à partir d'un champ de l'ordre
@@ -126,7 +138,7 @@ CHAMPS_OBLIGATOIRES = {
     "supprimer_document_client": ["libelle_cible"],
     "modifier_note_client": ["sujet_cible"],
     "supprimer_note_client": ["sujet_cible"],
-    "telecharger_factures_client": ["periode_du", "periode_au"],
+    "telecharger_factures_client": [("periodes", "nombre_dernieres")],   # l'un OU l'autre
 }
 
 # Valeurs remplies par le script, jamais demandées au modèle
@@ -188,7 +200,7 @@ def generer_schema():
     """Schéma imposé à la réponse du modèle : une liste d'ordres, chacun conforme à une recette du catalogue."""
     definitions = {}
     for numero, (action, recette) in enumerate(egesys.CATALOGUE_ACTIONS.items()):
-        if action in ACTIONS_DESACTIVEES:
+        if action in ACTIONS_DESACTIVEES or action in egesys.ACTIONS_INTERNES:
             continue
         proprietes = {
             "action": {"type": "string", "const": action,
@@ -386,8 +398,10 @@ def finaliser_ordre(ordre, pieces_jointes, incertitudes):
         incertitudes.append(f"{ordre['action']} : client non identifié.")
     valeurs = {**ordre, **{k: v for d in ordre.values() if isinstance(d, dict) for k, v in d.items()}}
     for champ in CHAMPS_OBLIGATOIRES.get(ordre["action"], []):
-        if not valeurs.get(champ):
-            incertitudes.append(f"{ordre['action']} : le champ obligatoire '{champ}' n'est pas précisé dans le mail.")
+        choix = champ if isinstance(champ, tuple) else (champ,)   # tuple : au moins un des champs rempli
+        if not any(valeurs.get(c) for c in choix):
+            incertitudes.append(f"{ordre['action']} : le champ obligatoire '{' ou '.join(choix)}' "
+                                "n'est pas précisé dans le mail.")
     return ordre
 
 def valider_ordre(ordre):

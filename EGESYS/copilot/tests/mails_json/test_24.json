@@ -1,5 +1,5 @@
 {
   "destinataire": "thomas.gineste@sogen.coop",
-  "objet": "[EGSYS] [TEST 24] Fiche Guitton",
-  "corps": "<p>Bonjour,</p><p>Le titulaire de la fiche Guitton est maintenant Dominique Guitton. Pouvez-vous corriger le prénom ?</p><p>Merci</p>"
+  "objet": "[EGSYS] [TEST 24] Fiche 64233008",
+  "corps": "<p>Bonjour,</p><p>Le titulaire de la fiche du client 64233008 est maintenant Dominique. Pouvez-vous corriger le prénom ?</p><p>Merci</p>"
 }

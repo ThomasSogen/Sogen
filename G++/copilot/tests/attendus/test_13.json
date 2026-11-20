@@ -1,0 +1,13 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "telecharger_facture",
+      "justification": "*",
+      "cheptel": "64233008",
+      "nom_eleveur": "",
+      "date_facture": "17/08/2016"
+    }
+  ],
+  "incertitudes": []
+}

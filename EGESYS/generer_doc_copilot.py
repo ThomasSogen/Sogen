@@ -70,7 +70,7 @@ def generer_actions(schema):
             f"### `{action}`",
             "",
             f"{description} Champs obligatoires : "
-            f"{', '.join(f'`{c}`' for c in obligatoires) if obligatoires else 'client uniquement (`nom_client` ou `code_client`)'}.",
+            f"{', '.join(' ou '.join(f'`{x}`' for x in (c if isinstance(c, tuple) else (c,))) for c in obligatoires) if obligatoires else 'client uniquement (`nom_client` ou `code_client`)'}.",
             "",
             "```json",
             json.dumps(_modele_vide(definition), ensure_ascii=False, indent=2),

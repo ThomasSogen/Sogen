@@ -4,8 +4,8 @@
     {
       "action": "modifier_modèle_de_reglement_client",
       "justification": "*",
-      "code_client": "",
-      "nom_client": "guitton",
+      "code_client": "64233008",
+      "nom_client": "",
       "date_cible": "01/11/2026",
       "modèle_de_reglement": {
         "bic": "PSSTFRPPXXX",

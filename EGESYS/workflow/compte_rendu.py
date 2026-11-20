@@ -8,7 +8,7 @@ import re
 from datetime import datetime
 from html import escape
 
-from script_egesys import lignes_modification, LIBELLES_NOTE
+from script_egesys import lignes_modification, libelle_periode, lire_periodes, libelle_dernieres, LIBELLES_NOTE
 
 LIBELLES_ACTIONS = {
     "modifier_civilite_client": "Modification de la civilité",
@@ -33,7 +33,11 @@ LIBELLES_ACTIONS = {
     "telecharger_factures_client": "Duplicatas de factures",
 }
 LIBELLES_FACTURE = {"numero_facture": "Numéro de facture", "date_realisation": "Date de la facture",
-                    "date_etat": "Date de validation", "montant": "Montant TTC"}
+                    "date_etat": "Date de validation", "montant": "Montant TTC", "periodes": "dates des factures"}
+RAISON_DATES_SANS_FACTURE = ("Aucune facture validée n'a été trouvée pour ce client aux dates demandées : rien n'a été "
+                             "récupéré.")
+MOTIF_FACTURES_MANQUANTES = ("Les duplicatas trouvés sont joints à ce mail. Pour les dates marquées « Non trouvée », "
+                             "aucune facture validée n'existe dans EGESYS : la raison est indiquée.")
 
 # Mise en forme HTML du mail (styles en ligne et tableaux : seule forme bien rendue par Outlook)
 POLICE = "font-family:'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.5;color:#222222;"
@@ -147,14 +151,29 @@ def client_lisible(ordre):
     return f"facture n° {numero}" if numero else "client non précisé"
 
 
+def dates_lisibles(ordre):
+    """Dates / périodes d'une demande de plusieurs factures : « le 31/01/2026 ; du 01/03/2026 au 31/03/2026 »
+    (ancien format periode_du / periode_au accepté ; texte brut si illisible)."""
+    factures = ordre.get("factures") or {}
+    texte = factures.get("periodes") or (f"{factures['periode_du']} au {factures['periode_au']}"
+                                         if factures.get("periode_du") and factures.get("periode_au") else "")
+    try:
+        dates = " ; ".join(libelle_periode(du, au) for du, au in lire_periodes(texte)) if str(texte).strip() else ""
+    except ValueError:
+        dates = str(texte).strip()
+    nombre = str(factures.get("nombre_dernieres", "")).strip()
+    if nombre.isdigit() and int(nombre) > 0:   # « les 3 dernières factures (du 01/01/2018 au 31/12/2018) »
+        return libelle_dernieres(nombre) + (f" ({dates})" if dates else "")
+    return dates
+
+
 def valeurs_demandees(ordre):
     if ordre.get("action") == "telecharger_facture_client":
         criteres = [f"{libelle_champ(champ)} : « {valeur} »" for champ, valeur in (ordre.get("facture") or {}).items()
                     if str(valeur).strip()]
         return criteres or ["Aucun critère précis : la facture validée la plus récente."]
     if ordre.get("action") == "telecharger_factures_client":
-        periode = ordre.get("factures") or {}
-        return [f"Toutes les factures validées du « {periode.get('periode_du', '?')} » au « {periode.get('periode_au', '?')} »"]
+        return [f"Factures validées demandées : « {dates_lisibles(ordre) or 'non précisées'} »"]
     try:
         return lignes_modification(ordre, {})
     except (AttributeError, TypeError):
@@ -224,7 +243,8 @@ def bloc_demande(index, action, client, libelle, valeurs, motif, ton):
         morceaux.append(paragraphe(f'<b style="color:{couleur};">Raison :</b> {e(motif["texte"])}',
                                    "margin-left:18px;"))
         if motif["candidates"]:
-            morceaux.append(paragraphe("<u>Factures possibles</u> :", "margin-left:36px;"))
+            titre = "Détail par date" if motif["texte"] == RAISON_DATES_SANS_FACTURE else "Factures possibles"
+            morceaux.append(paragraphe(f"<u>{titre}</u> :", "margin-left:36px;"))
             morceaux.append(liste([e(c) for c in motif["candidates"]], marge=54))
         if motif["technique"]:
             morceaux.append(paragraphe(f"<i>Détail technique : {e(motif['technique'])}</i>",
@@ -243,6 +263,7 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
     incertitudes = [traduire_incertitude(texte) for texte in (incertitudes_validateur or incertitudes_agent)]
 
     executees, non_executees, a_verifier = [], [], []
+    incompletes = 0       # demandes de plusieurs factures exécutées, mais avec des dates sans facture
     for numero, ordre in enumerate(ordres, start=1):
         entete = (libelle_action(ordre.get('action')), client_lisible(ordre))
         demande = valeurs_demandees(ordre)
@@ -255,6 +276,9 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
             if ordre.get("action") == "telecharger_facture_client" and fichiers and not resultat.get("modification"):
                 faits = [f"Duplicata PDF récupéré : {nom}" for nom in fichiers]
             detail = nettoyer(resultat.get("detail", ""))
+            if resultat.get("manquantes"):     # plusieurs factures : certaines dates sans facture
+                incompletes += 1
+                detail = MOTIF_FACTURES_MANQUANTES + (f" {detail}." if detail else "")
             executees.append((*entete, faits, raison(detail) if detail else None))
         elif resultat.get("resultat") == "Erreur" and resultat.get("detail", "").startswith("Modification faite"):
             faits = resultat.get("modification", "").splitlines() or demande
@@ -273,11 +297,16 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
                 elif "clients différents" in detail:
                     texte = ("Les factures trouvées appartiennent à plusieurs clients : rien n'a été récupéré pour "
                              "éviter une erreur. Précisez le code client.")
+                elif "trouvée pour ce client" in detail:
+                    texte = ("Aucune facture validée n'a été trouvée pour ce client : rien n'a été récupéré. "
+                             "Vérifiez le code client.")
                 elif "maximum" in detail:
-                    texte = ("Trop de factures sur cette période (30 au maximum par demande) : rien n'a été "
-                             "récupéré. Réduisez la période.")
+                    texte = ("Trop de factures pour les dates demandées (30 au maximum par demande) : rien n'a été "
+                             "récupéré. Réduisez les périodes.")
                 else:
-                    texte = "Aucune facture validée n'a été trouvée pour ce client sur cette période."
+                    texte = RAISON_DATES_SANS_FACTURE
+                    # « Aucune facture le 15/08/2026 : raison » : une ligne par date / période demandée
+                    candidates = [nettoyer(m) for m in re.findall(r"Aucune facture ((?:le|du) .*?)(?= \||$)", detail)]
                 motif = raison(texte, candidates=candidates)
             else:
                 motif = raison(*traduire_erreur_execution(detail))
@@ -301,6 +330,10 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
         ton = "erreur"
     elif not ordres:
         bilan = "aucune modification n'a été faite dans EGESYS : aucune demande exploitable n'a été trouvée dans le mail."
+        ton = "attention"
+    elif len(executees) == total and incompletes:
+        bilan = ("les factures trouvées sont jointes, mais certaines dates demandées n'ont pas de facture "
+                 "(voir « Non trouvée » ci-dessous).")
         ton = "attention"
     elif len(executees) == total:
         bilan = f"tout a été fait ({total} demande{'s' if total > 1 else ''} exécutée{'s' if total > 1 else ''})."
@@ -350,8 +383,12 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
                         "(ou demandez leur exécution manuelle).")
     if any("factures correspondent" in motif["texte"] for motif in motifs):
         conseils.append("<b>Renvoyez la demande</b> en précisant le numéro de la facture, sa date ou son montant.")
-    if any("période" in motif["texte"] or "plusieurs clients" in motif["texte"] for motif in motifs):
-        conseils.append("<b>Renvoyez la demande</b> en vérifiant le client (code client) et la période des factures.")
+    if any(motif["texte"] == RAISON_DATES_SANS_FACTURE or "périodes" in motif["texte"]
+           or "plusieurs clients" in motif["texte"] for motif in motifs):
+        conseils.append("<b>Renvoyez la demande</b> en vérifiant le client (code client) et les dates des factures.")
+    if incompletes:
+        conseils.append("<b>Vérifiez les dates sans facture</b> dans EGESYS (Factures) puis, si besoin, renvoyez la "
+                        "demande avec les bonnes dates.")
     if any(motif["technique"] or "Pas tentée" in motif["texte"] for motif in motifs) or a_verifier:
         conseils.append("<b>Vérifiez la fiche du client dans EGESYS</b> : les demandes non exécutées peuvent être "
                         "refaites à la main ou renvoyées.")
@@ -373,6 +410,8 @@ def rediger(code, ordres, incertitudes_agent, sortie_validation="", resultats_ex
     # --- Objet du mail de réponse, selon le résultat ---
     if a_verifier:
         objet = "Traitement interrompu, à vérifier dans EGESYS"
+    elif ordres and len(executees) == total and incompletes:
+        objet = "Demande traitée, factures manquantes"
     elif ordres and len(executees) == total:
         objet = "Demande traitée"
     elif executees:
@@ -416,14 +455,16 @@ def mail_client(details_ordres, pdf, ordres_recus=()):
     if not MOTIF_MAIL.fullmatch(adresse):
         return dict(MAIL_CLIENT_VIDE)
 
-    # Période demandée (« toutes les factures de mars ») : reprise de l'ordre de l'agent, s'il y en a une
+    # Dates / périodes demandées (« la facture du 31/01 et toutes celles de mars ») : reprises de l'ordre de l'agent
     periodes = []
     for d in avec_factures:
         index = (d.get("numero") or 0) - 1
         ordre = ordres_recus[index] if 0 <= index < len(ordres_recus) and isinstance(ordres_recus[index], dict) else {}
-        periode = ordre.get("factures") or {}
-        if periode.get("periode_du") and periode.get("periode_au"):
-            periodes.append(f"du {periode['periode_du']} au {periode['periode_au']}")
+        if ordre.get("action") == "telecharger_factures_client" and dates_lisibles(ordre):
+            periodes.append(dates_lisibles(ordre).replace(" ; ", ", "))
+    manquantes = [m["periode"] for d in avec_factures for m in (d.get("manquantes") or []) if not m.get("nombre_demande")]
+    # « Ses 3 dernières factures » alors que le client n'en a que 2 : on le dit simplement
+    incomplets = [m for d in avec_factures for m in (d.get("manquantes") or []) if m.get("nombre_demande")]
 
     numeros = list(dict.fromkeys(f.get("numero_facture", "") for f in factures))   # sans doublon, dans l'ordre
     code = factures[0].get("code_client", "")
@@ -434,14 +475,18 @@ def mail_client(details_ordres, pdf, ordres_recus=()):
         elements = []
     else:
         objet = f"{OBJET_CLIENT}duplicatas de vos factures"
-        quand = f" {e(' et '.join(periodes))}" if periodes else ""
-        demande = (f"Vous nous avez demandé les duplicatas de vos factures{quand} (client n° {e(code)}). "
+        quand = f" ({e(', '.join(periodes))}, client n° {e(code)})" if periodes else f" (client n° {e(code)})"
+        demande = (f"Vous nous avez demandé les duplicatas de vos factures{quand}. "
                    f"Vous trouverez les {len(numeros)} factures en pièces jointes de ce mail :")
         elements = [f"Facture n° {e(n)}" for n in numeros]
     corps = (f'<div style="{POLICE}">'
              + paragraphe("Bonjour,", "margin-bottom:10px;")
              + paragraphe(demande)
              + (liste(elements) if elements else "")
+             + (paragraphe(f"Nous n'avons trouvé aucune facture {e(', '.join(manquantes))}.", "margin-top:10px;")
+                if manquantes else "")
+             + "".join(paragraphe(f"Vous nous aviez demandé {e(m['periode'])} : nous n'en avons trouvé que "
+                                  f"{len(numeros)}.", "margin-top:10px;") for m in incomplets[:1])
              + paragraphe(f"Cordialement,<br>{e(SIGNATURE_CLIENT)}", "margin-top:10px;")
              + "</div>")
     return {"mail": adresse, "objet": objet, "corps": corps}

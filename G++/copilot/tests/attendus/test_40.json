@@ -1,0 +1,13 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "telecharger_facture",
+      "justification": "*",
+      "cheptel": "",
+      "nom_eleveur": "EARL BITNAOU",
+      "date_facture": "31/03/2019"
+    }
+  ],
+  "incertitudes": []
+}

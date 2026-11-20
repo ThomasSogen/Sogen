@@ -1,5 +1,5 @@
 {
   "destinataire": "thomas.gineste@sogen.coop",
-  "objet": "[EGSYS] [TEST 20] Demande de duplicata - SCEA Brana",
-  "corps": "<p>Bonjour,</p><p>La SCEA Brana ne retrouve plus une de ses factures et nous en demande un duplicata.<br>Il s'agit de la facture établie le 31 mai 2026, validée le 15 juin, d'un montant total de 652,49 €.</p><p>Pouvez-vous nous l'envoyer ?<br>Merci</p>"
+  "objet": "[EGSYS] [TEST 20] Demande de duplicata - client 64233008",
+  "corps": "<p>Bonjour,</p><p>Le client 64233008 ne retrouve plus une de ses factures et nous en demande un duplicata.<br>Il s'agit de la facture établie le 31 mars 2019, validée le 15 avril 2019, d'un montant total de 79,18 €.</p><p>Pouvez-vous nous l'envoyer ?<br>Merci</p>"
 }

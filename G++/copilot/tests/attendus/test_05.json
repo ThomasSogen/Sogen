@@ -5,11 +5,9 @@
       "action": "telecharger_facture",
       "justification": "*",
       "cheptel": "",
-      "nom_eleveur": "GAEC LES VIGNES ROUSSES",
-      "date_facture": "28/02/2026"
+      "nom_eleveur": "EARL DURAND",
+      "date_facture": "31/03/2019"
     }
   ],
-  "incertitudes": [
-    "*"
-  ]
+  "incertitudes": []
 }

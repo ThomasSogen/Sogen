@@ -64,7 +64,8 @@ DELAI_SYNCHRO = 3              # fichier modifié il y a moins de 3 s : peut-êt
 DELAI_JSON_ILLISIBLE = 60      # un JSON illisible est retenté pendant 60 s avant d'être refusé
 DUREE_MAX_BASE, DUREE_MAX_PAR_ORDRE = 600, 300   # délai maximal d'exécution d'un mail (secondes)
 DUREE_MAX_PAR_FACTURE = 120                       # + par facture attendue (duplicatas sur une période)
-INACTIVITE_MAX = 300           # exécution arrêtée si elle n'affiche plus rien pendant 5 min (GENICIA++ figé)
+INACTIVITE_MAX = 60            # exécution arrêtée si elle n'affiche plus rien pendant 1 min (GENICIA++ figé) ;
+                               # le journal détaillé (genicia_auto.journal) écrit un signe de vie toutes les 20 s
 
 WINDOWS = sys.platform == "win32"
 SANS_FENETRE = subprocess.CREATE_NO_WINDOW if WINDOWS else 0
@@ -179,8 +180,9 @@ def executer(valide, travail, ordres):
     arret = ""
     while p.poll() is None:
         if time.time() - derniere_activite[0] > INACTIVITE_MAX:
-            arret = (f"🛑 Aucune activité depuis {INACTIVITE_MAX // 60} min : GENICIA++ semble figé, "
-                     "programme arrêté.")
+            derniere = next((l.strip() for l in reversed(lignes) if l.strip()), "aucune")
+            arret = (f"🛑 Aucune activité depuis {INACTIVITE_MAX} s : GENICIA++ semble figé, programme arrêté. "
+                     f"Dernière action écrite : {derniere}")
         elif time.time() - debut[0] > duree_max:
             arret = "🛑 Délai d'exécution dépassé : programme arrêté."
         if arret:

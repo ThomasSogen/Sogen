@@ -4,10 +4,10 @@
     {
       "action": "telecharger_factures",
       "justification": "*",
-      "cheptel": "64284002",
-      "nom_eleveur": "GAEC LES VIGNES ROUSSES",
-      "periode_du": "01/02/2026",
-      "periode_au": "31/03/2026"
+      "cheptel": "64233008",
+      "nom_eleveur": "",
+      "periodes": "01/01/2019 au 31/12/2019",
+      "nombre_dernieres": ""
     }
   ],
   "incertitudes": []

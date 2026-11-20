@@ -31,7 +31,8 @@ def generer():
                "## Actions GENICIA++ disponibles", ""]
     for action, definition in CATALOGUE.items():
         lignes += [f"### `{action}`", "", definition["description"], "",
-                   "Champs obligatoires : " + ", ".join(f"`{c}`" for c in definition["obligatoires"]), "",
+                   "Champs obligatoires : " + ", ".join(" ou ".join(f"`{x}`" for x in (c if isinstance(c, tuple) else (c,)))
+                                              for c in definition["obligatoires"]), "",
                    "Champs :", ""]
         lignes += ["- `justification` : extrait exact du mail qui justifie l'ordre"]
         lignes += [f"- `{champ}` : {texte}" for champ, texte in definition["champs"].items()]

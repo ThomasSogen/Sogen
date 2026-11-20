@@ -4,8 +4,8 @@
     {
       "action": "telecharger_facture_client",
       "justification": "*",
-      "code_client": "",
-      "nom_client": "brana",
+      "code_client": "64233008",
+      "nom_client": "",
       "facture": {
         "date_etat": "",
         "date_realisation": "",

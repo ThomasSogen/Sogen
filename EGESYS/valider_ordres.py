@@ -58,6 +58,15 @@ def verifier_structure(ordre, definitions):
         return [f"action inconnue ou désactivée : '{ordre.get('action')}'"]
     erreurs = []
     proprietes = definition["properties"]
+    factures = ordre.get("factures")
+    if isinstance(factures, dict) and "periodes" not in factures and {"periode_du", "periode_au"} <= set(factures) \
+            and "periodes" in proprietes.get("factures", {}).get("properties", {}):
+        # Ancien format (une seule période) : converti en « JJ/MM/AAAA au JJ/MM/AAAA »
+        du, au = str(factures.pop("periode_du")).strip(), str(factures.pop("periode_au")).strip()
+        factures["periodes"] = f"{du} au {au}" if du and au else ""
+    if isinstance(ordre.get("factures"), dict) and "nombre_dernieres" in proprietes.get("factures", {}).get(
+            "properties", {}):
+        ordre["factures"].setdefault("nombre_dernieres", "")   # Agent d'avant cette option : aucune limite
     for champ, defaut in CHAMPS_FACULTATIFS.items():  # Ex : activite_actuelle absente = "" (non précisée)
         if champ in proprietes:
             ordre.setdefault(champ, defaut)

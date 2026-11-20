@@ -4,8 +4,8 @@
     {
       "action": "ajouter_modèle_de_reglement_client",
       "justification": "*",
-      "code_client": "",
-      "nom_client": "guitton",
+      "code_client": "64233008",
+      "nom_client": "",
       "modèle_de_reglement": {
         "bic": "AGRIFRPP",
         "compte general": "",

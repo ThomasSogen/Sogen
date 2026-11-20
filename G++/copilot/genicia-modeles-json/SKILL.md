@@ -24,13 +24,13 @@ Profil vide ("") : le profil `ELWEB1 STANDARD` est utilisé.
 
 Récupère le duplicata PDF d'une facture d'un éleveur (Bilan éleveur > F5 DETAILLER > F5 DUPLICATA). Lecture seule : rien n'est modifié dans GENICIA++.
 
-Champs obligatoires : `cheptel`, `date_facture`
+Champs obligatoires : `cheptel` ou `nom_eleveur`, `date_facture`
 
 Champs :
 
 - `justification` : extrait exact du mail qui justifie l'ordre
 - `cheptel` : N° de cheptel de l'éleveur : 8 caractères sans espace (ex : 12345678). « Code client » et « numéro d'élevage » désignent aussi le n° de cheptel
-- `nom_eleveur` : Nom de l'éleveur tel qu'écrit dans le mail (information seulement), sinon ""
+- `nom_eleveur` : Nom de l'éleveur tel qu'écrit dans le mail, sinon "". Sans n° de cheptel, le programme retrouve l'éleveur par ce nom dans GENICIA++ (un seul éleveur possible, sinon rien n'est fait)
 - `date_facture` : Date de la facture, JJ/MM/AAAA
 
 Modèle JSON (recopier toutes les clés, dans cet ordre) :
@@ -47,17 +47,17 @@ Modèle JSON (recopier toutes les clés, dans cet ordre) :
 
 ### `telecharger_factures`
 
-Récupère le duplicata PDF de TOUTES les factures d'un éleveur sur une période (ex : un mois, un trimestre, une année ; 30 factures maximum). Lecture seule : rien n'est modifié dans GENICIA++.
+Récupère le duplicata PDF de PLUSIEURS factures d'un éleveur : toutes celles de une ou plusieurs dates précises et/ou périodes (ex : un mois, un trimestre, une année ; 30 factures maximum), ou les N dernières factures (« ses 3 dernières factures »). Une date ou une période sans facture n'arrête pas la demande : les factures trouvées sont envoyées et les manques expliqués. Lecture seule : rien n'est modifié dans GENICIA++.
 
-Champs obligatoires : `cheptel`, `periode_du`, `periode_au`
+Champs obligatoires : `cheptel` ou `nom_eleveur`, `periodes` ou `nombre_dernieres`
 
 Champs :
 
 - `justification` : extrait exact du mail qui justifie l'ordre
 - `cheptel` : N° de cheptel de l'éleveur : 8 caractères sans espace (ex : 12345678). « Code client » et « numéro d'élevage » désignent aussi le n° de cheptel
-- `nom_eleveur` : Nom de l'éleveur tel qu'écrit dans le mail (information seulement), sinon ""
-- `periode_du` : Premier jour de la période des factures demandées, JJ/MM/AAAA (ex : mars 2026 → 01/03/2026)
-- `periode_au` : Dernier jour de la période des factures demandées, JJ/MM/AAAA (ex : mars 2026 → 31/03/2026)
+- `nom_eleveur` : Nom de l'éleveur tel qu'écrit dans le mail, sinon "". Sans n° de cheptel, le programme retrouve l'éleveur par ce nom dans GENICIA++ (un seul éleveur possible, sinon rien n'est fait)
+- `periodes` : Dates et/ou périodes des factures demandées, séparées par « ; ». Une date précise : JJ/MM/AAAA ; une période : JJ/MM/AAAA au JJ/MM/AAAA (premier et dernier jour inclus). Ex : « la facture du 31 janvier et celles de mars 2026 » → "31/01/2026 ; 01/03/2026 au 31/03/2026"
+- `nombre_dernieres` : Nombre des dernières factures demandées, en chiffres (« ses 3 dernières factures » → "3"), sinon "". Seules les plus récentes sont prises (parmi les dates de "periodes" si elles sont données, sinon parmi toutes les factures de l'éleveur)
 
 Modèle JSON (recopier toutes les clés, dans cet ordre) :
 
@@ -67,8 +67,8 @@ Modèle JSON (recopier toutes les clés, dans cet ordre) :
   "justification": "",
   "cheptel": "",
   "nom_eleveur": "",
-  "periode_du": "",
-  "periode_au": ""
+  "periodes": "",
+  "nombre_dernieres": ""
 }
 ```
 
@@ -76,13 +76,13 @@ Modèle JSON (recopier toutes les clés, dans cet ordre) :
 
 Ouvre les droits web de l'éleveur (profil choisi), génère un nouveau mot de passe, envoie par mail à l'éleveur ses identifiants (adresse de sa fiche) et l'abonne aux factures par mail sans pièce jointe. Modifie la fiche de l'éleveur.
 
-Champs obligatoires : `cheptel`
+Champs obligatoires : `cheptel` ou `nom_eleveur`
 
 Champs :
 
 - `justification` : extrait exact du mail qui justifie l'ordre
 - `cheptel` : N° de cheptel de l'éleveur : 8 caractères sans espace (ex : 12345678). « Code client » et « numéro d'élevage » désignent aussi le n° de cheptel
-- `nom_eleveur` : Nom de l'éleveur tel qu'écrit dans le mail (information seulement), sinon ""
+- `nom_eleveur` : Nom de l'éleveur tel qu'écrit dans le mail, sinon "". Sans n° de cheptel, le programme retrouve l'éleveur par ce nom dans GENICIA++ (un seul éleveur possible, sinon rien n'est fait)
 - `profil` : Profil web demandé (liste fermée) ; "" si le mail n'en parle pas → ELWEB1 STANDARD
 
 Modèle JSON (recopier toutes les clés, dans cet ordre) :
@@ -168,7 +168,7 @@ Points d'attention :
 }
 ```
 
-### Exemple 3 : numéro de cheptel absent et date imprécise
+### Exemple 3 : éleveur désigné par son nom, dernière facture
 
 ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX03`
 Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
@@ -180,7 +180,8 @@ Mail reçu :
 > Bonjour, pouvez-vous renvoyer à l'EARL DURAND sa dernière facture ? Merci.
 
 Points d'attention :
-- Sans numéro de cheptel ni date précise, l'ordre est créé avec des champs vides et deux incertitudes : rien ne sera exécuté.
+- « sa dernière facture » : "telecharger_factures" avec "nombre_dernieres" = "1" (pas d'incertitude sur la date).
+- Sans numéro de cheptel : "cheptel" vide et "nom_eleveur" recopié, SANS incertitude : le programme retrouve l'éleveur par son nom (s'il y en a plusieurs, il ne fait rien et le signale).
 
 ```json
 {
@@ -189,21 +190,19 @@ Points d'attention :
   "expediteur": "gestionnaire@exemple.fr",
   "ordres": [
     {
-      "action": "telecharger_facture",
+      "action": "telecharger_factures",
       "justification": "pouvez-vous renvoyer à l'EARL DURAND sa dernière facture ?",
       "cheptel": "",
       "nom_eleveur": "EARL DURAND",
-      "date_facture": ""
+      "periodes": "",
+      "nombre_dernieres": "1"
     }
   ],
-  "incertitudes": [
-    "Numéro de cheptel manquant pour l'EARL DURAND : le programme ne retrouve pas un éleveur par son nom. Indiquer le numéro de cheptel (8 caractères).",
-    "Date exacte de la facture à préciser : « la dernière facture » ne suffit pas. Indiquer la date de la facture (JJ/MM/AAAA)."
-  ]
+  "incertitudes": []
 }
 ```
 
-### Exemple 4 : duplicatas de toutes les factures d'une période
+### Exemple 4 : duplicatas de toutes les factures d'une période et d'une date précise
 
 ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX05`
 Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
@@ -212,25 +211,58 @@ Mail reçu :
 
 > Objet : G++ factures EARL MOREAU
 >
-> Bonjour, l'EARL MOREAU (cheptel 23456789) voudrait recevoir toutes ses factures du premier trimestre 2026. Merci !
+> Bonjour, l'EARL MOREAU (cheptel 23456789) voudrait recevoir toutes ses factures du premier trimestre 2026, ainsi que sa facture du 31 mai 2026. Merci !
 
 Points d'attention :
-- Plusieurs factures sur une période : UN seul ordre « telecharger_factures », ce n'est pas une incertitude.
-- « premier trimestre 2026 » = du 01/01/2026 au 31/03/2026.
+- Plusieurs factures (période + date précise) : UN seul ordre « telecharger_factures », ce n'est pas une incertitude.
+- « premier trimestre 2026 » = 01/01/2026 au 31/03/2026 ; la date précise s'ajoute après « ; ».
 
 ```json
 {
-  "resume": "Duplicatas de toutes les factures du 1er trimestre 2026 de l'EARL MOREAU.",
+  "resume": "Duplicatas des factures du 1er trimestre 2026 et de la facture du 31/05/2026 de l'EARL MOREAU.",
   "id_message": "AAMkXXXXXXXXXXXX05",
   "expediteur": "gestionnaire@exemple.fr",
   "ordres": [
     {
       "action": "telecharger_factures",
-      "justification": "l'EARL MOREAU (cheptel 23456789) voudrait recevoir toutes ses factures du premier trimestre 2026",
+      "justification": "l'EARL MOREAU (cheptel 23456789) voudrait recevoir toutes ses factures du premier trimestre 2026, ainsi que sa facture du 31 mai 2026",
       "cheptel": "23456789",
       "nom_eleveur": "EARL MOREAU",
-      "periode_du": "01/01/2026",
-      "periode_au": "31/03/2026"
+      "periodes": "01/01/2026 au 31/03/2026 ; 31/05/2026",
+      "nombre_dernieres": ""
+    }
+  ],
+  "incertitudes": []
+}
+```
+
+### Exemple 4 bis : les dernières factures, sans date
+
+ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX06`
+Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
+
+Mail reçu :
+
+> Objet : G++ factures
+>
+> Bonjour, le GAEC MARTIN (cheptel 34567890) voudrait ses trois dernières factures. Merci.
+
+Points d'attention :
+- « ses trois dernières factures » : "nombre_dernieres" = "3", "periodes" vide. Ce n'est pas une incertitude : le programme prend les 3 plus récentes du bilan.
+
+```json
+{
+  "resume": "Duplicatas des 3 dernières factures du GAEC MARTIN.",
+  "id_message": "AAMkXXXXXXXXXXXX06",
+  "expediteur": "gestionnaire@exemple.fr",
+  "ordres": [
+    {
+      "action": "telecharger_factures",
+      "justification": "le GAEC MARTIN (cheptel 34567890) voudrait ses trois dernières factures.",
+      "cheptel": "34567890",
+      "nom_eleveur": "GAEC MARTIN",
+      "periodes": "",
+      "nombre_dernieres": "3"
     }
   ],
   "incertitudes": []

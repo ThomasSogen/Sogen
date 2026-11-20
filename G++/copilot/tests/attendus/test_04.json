@@ -2,18 +2,12 @@
   "resume": "*",
   "ordres": [
     {
-      "action": "telecharger_facture",
+      "action": "telecharger_factures",
       "justification": "*",
-      "cheptel": "64284002",
+      "cheptel": "64233008",
       "nom_eleveur": "",
-      "date_facture": "31/01/2026"
-    },
-    {
-      "action": "telecharger_facture",
-      "justification": "*",
-      "cheptel": "64284002",
-      "nom_eleveur": "",
-      "date_facture": "28/02/2026"
+      "periodes": "31/01/2019 ; 31/03/2019",
+      "nombre_dernieres": ""
     }
   ],
   "incertitudes": []

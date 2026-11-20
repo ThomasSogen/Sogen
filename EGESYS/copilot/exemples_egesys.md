@@ -192,33 +192,67 @@ Points d'attention :
 }
 ```
 
-## Exemple 5 : duplicatas de toutes les factures d'un mois
+## Exemple 5 : duplicatas des factures d'un mois et d'une date précise
 
 ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX06`
 Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
 
 Mail reçu :
 
-> Bonjour, M. Dupont souhaite recevoir un duplicata de toutes ses factures du mois de mars 2026. Merci.
+> Bonjour, M. Dupont souhaite recevoir un duplicata de toutes ses factures du mois de mars 2026, ainsi que de sa facture du 31 mai 2026. Merci.
 
 Points d'attention :
-- Plusieurs factures sur une période : UN seul ordre « telecharger_factures_client », ce n'est pas une incertitude.
-- « mars 2026 » = du premier au dernier jour du mois.
+- Plusieurs factures (période + date précise) : UN seul ordre « telecharger_factures_client », ce n'est pas une incertitude.
+- « mars 2026 » = 01/03/2026 au 31/03/2026 ; la date précise s'ajoute après « ; ».
 
 ```json
 {
-  "resume": "Duplicatas de toutes les factures de mars 2026 pour M. Dupont.",
+  "resume": "Duplicatas des factures de mars 2026 et de la facture du 31/05/2026 pour M. Dupont.",
   "id_message": "AAMkXXXXXXXXXXXX06",
   "expediteur": "gestionnaire@exemple.fr",
   "ordres": [
     {
       "action": "telecharger_factures_client",
-      "justification": "M. Dupont souhaite recevoir un duplicata de toutes ses factures du mois de mars 2026.",
+      "justification": "M. Dupont souhaite recevoir un duplicata de toutes ses factures du mois de mars 2026, ainsi que de sa facture du 31 mai 2026.",
       "code_client": "",
       "nom_client": "dupont",
       "factures": {
-        "periode_au": "31/03/2026",
-        "periode_du": "01/03/2026"
+        "nombre_dernieres": "",
+        "periodes": "01/03/2026 au 31/03/2026 ; 31/05/2026"
+      }
+    }
+  ],
+  "incertitudes": []
+}
+```
+
+## Exemple 5 bis : les dernières factures, sans date
+
+ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX07`
+Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
+
+Mail reçu :
+
+> Bonjour, le client 1234567 voudrait recevoir ses trois dernières factures. Merci.
+
+Points d'attention :
+- « ses trois dernières factures » : "nombre_dernieres" = "3", "periodes" vide. Ce n'est pas une incertitude : le programme prend les 3 plus récentes.
+- « sa dernière facture » (une seule) → « telecharger_facture_client » sans critère (exemple 4).
+
+```json
+{
+  "resume": "Duplicatas des 3 dernières factures du client 1234567.",
+  "id_message": "AAMkXXXXXXXXXXXX07",
+  "expediteur": "gestionnaire@exemple.fr",
+  "ordres": [
+    {
+      "action": "telecharger_factures_client",
+      "justification": "le client 1234567 voudrait recevoir ses trois dernières factures.",
+      "code_client": "1234567",
+      "nom_client": "",
+      "factures": {
+        "nombre_dernieres": "3",
+        "periodes": ""
       }
     }
   ],

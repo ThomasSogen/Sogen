@@ -49,7 +49,8 @@ def _bouton_cle(d):
 def _cliquer_cle(d):
     """Clique sur la clé jusqu'à ce que le mot de passe change (1er clic parfois ignoré)."""
     champ, cle = _bouton_cle(d)
-    avant = champ.text
+    g.journal("clic sur la clé : génération d'un nouveau mot de passe (jamais écrit dans le journal)")
+    avant = champ.text                     # lu sans journal : c'est un mot de passe
     for _ in range(3):
         g.clic_souris_element(cle)
         fin = time.time() + 5
@@ -72,7 +73,7 @@ def _ouvrir_communication(d, cheptel: str) -> str:
     g.attendre_ecran(ECRAN_COMMUNICATION)
     g.rechercher_eleveur(d, cheptel, lambda: any(g._nom(b) == "ENREGISTRER DROITS"
                                                  for b in g.visibles(d, "push button")))
-    eleveur = g.champ_par_libelle(d, "Eleveur").text
+    eleveur = g.lire(g.champ_par_libelle(d, "Eleveur"))
     print(f"   Éleveur : {eleveur}")
     return eleveur
 
@@ -127,7 +128,7 @@ def _generer_sur_la_fiche(d, eleveur: str, profil: str) -> dict:
     g.cliquer_souris_jusqua(confirmation, "OUI",
                             lambda: g.titre_fenetre_principale() == ECRAN_MAIL,
                             role="push button", description="ouverture du mail")
-    destinataire = g.champ_par_libelle(d, "A").text
+    destinataire = g.lire(g.champ_par_libelle(d, "A"))
     print(f"   Droits enregistrés, envoi du mail à {destinataire}")
 
     # 8 : envoi du mail

@@ -4,8 +4,8 @@
     {
       "action": "modifier_prenom_client",
       "justification": "*",
-      "code_client": "",
-      "nom_client": "guitton",
+      "code_client": "64233008",
+      "nom_client": "",
       "nouvelle_valeur_client": {
         "prenom": "DOMINIQUE"
       }

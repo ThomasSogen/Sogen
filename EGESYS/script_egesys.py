@@ -6,7 +6,8 @@ import copy
 from datetime import datetime, timedelta
 from moteur_egesys import (connexion_egesys, deconnexion_egesys, soumettre_page_webdev, uploader_fichier_webdev,
                           selectionner_ligne_table, chercher_lignes_table, valeurs_zones_repetees,
-                          telecharger_fichier_webdev, lire_table_webdev, executer_evenement_ajax)
+                          telecharger_fichier_webdev, lire_table_webdev, executer_evenement_ajax,
+                          IMAGE_BOUTON_RETOUR, declarations_champs, valeurs_formulaire)
 import config_egesys
 from journal_egesys import ajouter_au_journal, client_de
 
@@ -22,7 +23,15 @@ FICHIER_RESULTATS = os.environ.get('EGESYS_RESULTATS', '')
 # Verrou partagé : une seule connexion EGESYS à la fois (workflow et lancement manuel ne peuvent pas se chevaucher)
 FICHIER_VERROU = os.path.join(config_egesys.DOSSIER_LOCAL, 'connexion_egesys.lock')  # %LOCALAPPDATA%\EGESYS
 ATTENTE_VERROU = 900  # secondes
-AGENT_NOTES = '39'  # Liste "Agent" de la page Note : GINESTE Thomas (relevé le 06/11/2026, cartes/note_creation.json)
+# Agent (opérateur) des notes, choisi PAR SON NOM dans la liste "Agent" (A28) de la page Note : les valeurs techniques
+# diffèrent selon la base (production : GINESTE Thomas = 39 ; base de TEST : 39 = HIRIART David, constaté le 19/11/2026).
+AGENT_NOTES = 'GINESTE Thomas'
+LONGUEUR_SUJET_NOTE = 50  # Sujet de note au-delà : EGESYS le coupe (constaté le 19/11/2026 avec 59 caractères)
+# Retour à l'accueil (Tableau de bord) entre deux ordres : flèche "retour" des sous-pages (fiche client, note,
+# document : IMAGE_BOUTON_RETOUR), puis "page précédente" des pages de menu (A2 sur Gestion des clients, Factures...)
+IMAGE_BOUTON_PRECEDENT = 'btn_981f83cb297efb784d027d4d59a2e172aa3c6d0c.png'
+TITRES_ACCUEIL = ("tableau de bord", "menu général")
+CLICS_RETOUR_ACCUEIL = 15
 
 
 #dictionnaire de correspondance entre les civilités textuelles et leurs codes numériques dans EGESYS
@@ -359,9 +368,9 @@ CATALOGUE_ACTIONS = {
                 'A35': '{date_de_rappel}',
                 'A197': '{confidentiel}',
                 'A23': '{message}',
-                'A28': AGENT_NOTES,  # Agent (opérateur) de la note
                 'WD_BUTTON_CLICK_': 'A3' # Le bouton "Valider l'importation"
             },
+            "choisir_par_libelle": {'A28': AGENT_NOTES},  # Agent (opérateur) de la note, retrouvé par son nom
             "upload_webdev": {
                 'A29': '{piece_jointe}' # A29 est le bouton Upload HTML5 (envoi AJAX, remplit A9)
             },
@@ -445,9 +454,23 @@ CATALOGUE_ACTIONS = {
          "telechargement": {"champ": "A57", "dossier": DOSSIER_FACTURES, "prefixe": "facture_",
                             "nom": ['A20', 'A11'], "extension": ".pdf"}}
     ],
-    # Toutes les factures validées d'une période (ex : un mois) : la recherche liste les factures, puis chacune est
-    # téléchargée par la recette "telecharger_facture_client" avec son numéro exact (une facture à la fois).
+    # « dernieres » = N : seulement les N factures les plus récentes (« ses 3 dernières factures ») ; sans dates, toutes
+    # les factures du client sont parcourues (tableau trié de la plus récente à la plus ancienne).
+    # Toutes les factures validées de PLUSIEURS dates précises et/ou périodes (« 31/01/2026 ; 01/03/2026 au 31/03/2026 ») :
+    # chaque date / période est recherchée (recette interne "lister_factures_client") ; une date sans facture N'ARRÊTE
+    # PAS la demande (notée avec les factures les plus proches). Puis chaque facture trouvée est téléchargée par la
+    # recette "telecharger_facture_client" avec son numéro exact. Arrêt sans rien télécharger si aucune facture du tout,
+    # plus de "max" factures, ou factures de plusieurs clients.
     "telecharger_factures_client": [
+        # "client" : variables transmises à chaque recherche (elles figurent ainsi dans le modèle JSON de l'agent)
+        {"pour_chaque_periode": {"periodes": '{periodes}', "dernieres": '{nombre_dernieres}',
+                                 "client": ['{code_client}', '{nom_client}'],
+                                 "recherche": "lister_factures_client",
+                                 "action": "telecharger_facture_client", "dossier": "facture",
+                                 "variable": "numero_facture", "max": 30, "marge_proches_jours": 15}},
+    ],
+    # Recette INTERNE (jamais proposée à l'agent) : liste les factures validées d'une période, sans rien télécharger.
+    "lister_factures_client": [
         {"requete": {'WD_BUTTON_CLICK_': 'M3'}, "audit": {"titre_page": "Gestion des clients"}},
         {"remonter_jusqu_a": {"bouton": 'A2', "titre_page": "Menu Général", "max_clics": 15}},
         {"requete": {'WD_BUTTON_CLICK_': 'I35'}, "audit": {"titre_page": "Factures"}},
@@ -457,15 +480,12 @@ CATALOGUE_ACTIONS = {
                      'A60': '', 'A62': '', 'A67': '', 'A73': '',
                      'A51': '2', 'WD_BUTTON_CLICK_': 'A27'},
          "audit": {"titre_page": "Factures"},
-         # Pour chaque facture validée trouvée : recette d'une facture avec son numéro. Arrêt sans rien télécharger
-         # si aucune facture, si plus de "max" factures, ou si les factures appartiennent à plusieurs clients.
-         "pour_chaque_ligne": {"table": "A31", "critere": {'Etat': 'V'}, "colonne": 'A49', "colonne_client": 'A12',
-                               "action": "telecharger_facture_client", "dossier": "facture", "variable": "numero_facture",
-                               "max": 30, "element": "facture",
-                               "criteres_affiches": ['nom_client', 'code_client', 'periode_du', 'periode_au'],
-                               "colonnes_affichees": {"N°": 'A49', "Client": 'A12', "Date": 'Dt Fac', "TTC": 'TTC'}}},
+         "collecter_lignes": {"table": "A31", "critere": {'Etat': 'V'},
+                              "colonnes": {"numero": 'A49', "client": 'A12', "date": 'Dt Fac', "ttc": 'TTC'}}},
     ],
 }
+ACTIONS_INTERNES = {"lister_factures_client"}   # Étapes d'autres recettes : ni proposées à l'agent, ni acceptées seules
+MAX_PERIODES = 24                                # Dates / périodes au plus dans une demande de plusieurs factures
 
 # ==========================================
 # 3. L'EXÉCUTION (Le rôle de l'Agent IA)
@@ -474,7 +494,7 @@ CATALOGUE_ACTIONS = {
 # Factures : la note liste les duplicatas récupérés ; le n° de facture et le code client viennent des PDF enregistrés.
 NOTES_DE_SUIVI = {
     "telecharger_facture_client": "Duplicata facture {numero_facture}",
-    "telecharger_factures_client": "Duplicatas factures du {periode_du} au {periode_au}",
+    "telecharger_factures_client": "Duplicatas factures {periodes}",
     "modifier_civilite_client": "Modification civilité",
     "modifier_nom_client": "Modification nom",
     "modifier_prenom_client": "Modification prénom",
@@ -622,8 +642,19 @@ def preparer_donnees(ordre):
                          "facture", "factures"):
         donnees_plates.update(ordre.get(sous_dossier, {}))
     donnees_plates.update(plages_recherche_facture(ordre.get("facture", {})))
-    if "factures" in ordre:
-        controler_periode(ordre["factures"])
+    factures = ordre.get("factures", {})
+    if "periodes" in factures or "nombre_dernieres" in factures:
+        # Nombre de dernières factures : "" (toutes celles des dates) ou un entier de 1 à MAX_FACTURES
+        factures["nombre_dernieres"] = donnees_plates["nombre_dernieres"] = lire_nombre_dernieres(
+            factures.get("nombre_dernieres", ""))
+        # Normalisé : « 31/01/2026 ; 01/03/2026 au 31/03/2026 » (dates vérifiées, dans l'ordre du mail).
+        # Vide accepté seulement avec un nombre de dernières factures (toutes les factures du client sont parcourues).
+        texte = str(factures.get("periodes", "")).strip()
+        if texte or not factures["nombre_dernieres"]:
+            texte = texte_periodes(lire_periodes_ou_arret(texte))
+        factures["periodes"] = donnees_plates["periodes"] = texte
+    elif "factures" in ordre:
+        controler_periode(ordre["factures"])   # Recette interne : une seule période (periode_du / periode_au)
     # Pour une modification, un sujet non fourni reste celui de la note ciblée
     if not donnees_plates.get("sujet") and donnees_plates.get("sujet_cible"):
         donnees_plates["sujet"] = donnees_plates["sujet_cible"]
@@ -677,6 +708,73 @@ def controler_periode(factures):
             sys.exit(f"🛑 ERREUR : La date '{valeur}' ({champ}) doit être au format JJ/MM/AAAA.")
     if dates["periode_du"] > dates["periode_au"]:
         sys.exit(f"🛑 ERREUR : La période des factures commence après sa fin ({factures['periode_du']} > {factures['periode_au']}).")
+
+MOTIF_DATE = re.compile(r'(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})')
+
+def lire_periodes(texte):
+    """« 31/01/2026 ; 01/03/2026 au 31/03/2026 » → [(début, fin)] (dates, bornes incluses), dans l'ordre du texte.
+    Une date seule = ce jour-là (début = fin) ; deux dates = une période. Séparateurs : « ; », « , » ou retour à la
+    ligne. ValueError (message clair) si un morceau n'est ni une date ni une période valide, ou si une date est future."""
+    morceaux = [m.strip() for m in re.split(r'[;,\n]', str(texte)) if m.strip()]
+    if not morceaux:
+        raise ValueError("aucune date ni période de factures")
+    periodes = []
+    for morceau in morceaux:
+        dates = []
+        for jour, mois, annee in MOTIF_DATE.findall(morceau):
+            try:
+                dates.append(datetime(int(annee), int(mois), int(jour)).date())
+            except ValueError:
+                raise ValueError(f"« {morceau} » contient une date qui n'existe pas") from None
+        if len(dates) not in (1, 2):
+            raise ValueError(f"« {morceau} » n'est ni une date (JJ/MM/AAAA) ni une période (JJ/MM/AAAA au JJ/MM/AAAA)")
+        if dates[0] > dates[-1]:
+            raise ValueError(f"la période « {morceau} » commence après sa fin")
+        if dates[0] > datetime.now().date():
+            raise ValueError(f"« {morceau} » est dans le futur")
+        if (dates[0], dates[-1]) not in periodes:
+            periodes.append((dates[0], dates[-1]))
+    if len(periodes) > MAX_PERIODES:
+        raise ValueError(f"{len(periodes)} dates ou périodes (maximum {MAX_PERIODES})")
+    return periodes
+
+def lire_periodes_ou_arret(texte):
+    try:
+        return lire_periodes(texte)
+    except ValueError as erreur:
+        sys.exit(f"🛑 ERREUR : Dates des factures incorrectes : {erreur}.")
+
+def texte_periodes(periodes):
+    """Forme normalisée du champ « periodes » : « 31/01/2026 ; 01/03/2026 au 31/03/2026 »."""
+    return " ; ".join(du.strftime("%d/%m/%Y") if du == au else f"{du:%d/%m/%Y} au {au:%d/%m/%Y}" for du, au in periodes)
+
+def libelle_periode(du, au):
+    """« le 31/01/2026 » ou « du 01/03/2026 au 31/03/2026 »."""
+    return f"le {du:%d/%m/%Y}" if du == au else f"du {du:%d/%m/%Y} au {au:%d/%m/%Y}"
+
+MAX_DERNIERES = 30          # « Ses N dernières factures » : N de 1 à 30 (même limite que le téléchargement)
+DEBUT_HISTORIQUE = datetime(2000, 1, 1).date()   # Sans dates : recherche de toutes les factures depuis cette date
+
+def lire_nombre_dernieres(valeur):
+    """« 3 » → "3" ; "" → "" (pas de limite). Arrêt si ce n'est pas un entier de 1 à MAX_DERNIERES."""
+    texte = str(valeur).strip()
+    if not texte:
+        return ""
+    if not texte.isdigit() or not 1 <= int(texte) <= MAX_DERNIERES:
+        sys.exit(f"🛑 ERREUR : Nombre de dernières factures '{texte}' invalide (entier de 1 à {MAX_DERNIERES} attendu).")
+    return str(int(texte))
+
+def libelle_dernieres(nombre):
+    """« la dernière facture » / « les 3 dernières factures »."""
+    return "la dernière facture" if int(nombre) == 1 else f"les {int(nombre)} dernières factures"
+
+def date_facture(ligne):
+    """Date « Dt Fac » d'une ligne de facture relevée (None si illisible)."""
+    trouve = MOTIF_DATE.search(ligne.get("date", ""))
+    try:
+        return datetime(int(trouve.group(3)), int(trouve.group(2)), int(trouve.group(1))).date() if trouve else None
+    except ValueError:
+        return None
 
 def _valeur_lisible(champ, valeur):
     valeur = str(valeur).strip()
@@ -735,10 +833,27 @@ def note_de_suivi(ordre_original, anciennes_valeurs, fichiers=()):
         code_client, nom_client = factures[0][0], ""
         lignes = [f"Duplicata(s) de facture récupéré(s) automatiquement (agent EGESYS) le {datetime.now():%d/%m/%Y à %H:%M}."]
         lignes += [f"- Facture n° {numero}" for _, numero in factures]
+        if action == "telecharger_factures_client" and plates.get("nombre_dernieres"):
+            lignes.append(f"Demande : {libelle_dernieres(plates['nombre_dernieres'])}")
+        if action == "telecharger_factures_client" and plates.get("periodes"):
+            lignes.append(f"Dates demandées : {plates['periodes']}")
     else:
         lignes = [f"Modification enregistrée automatiquement (agent EGESYS) le {datetime.now():%d/%m/%Y à %H:%M}."]
         lignes += [f"- {ligne}" for ligne in lignes_modification(ordre_original, anciennes_valeurs)]
-    sujet = NOTES_DE_SUIVI[action].format_map({k: v for k, v in plates.items() if isinstance(v, str)})[:60]
+    if action == "telecharger_factures_client" and not plates.get("periodes") and plates.get("nombre_dernieres"):
+        plates["periodes"] = f"({libelle_dernieres(plates['nombre_dernieres'])})"   # « Duplicatas factures (les 3… »
+        plates["periodes"] = plates["periodes"].replace(" factures)", ")").replace(" facture)", ")")
+    elif action == "telecharger_factures_client":   # sujet court : « 31/05/26, 01/03/26-31/03/26 »
+        try:
+            periodes = lire_periodes(plates.get("periodes", ""))
+            plates["periodes"] = ", ".join(f"{du:%d/%m/%y}" if du == au else f"{du:%d/%m/%y}-{au:%d/%m/%y}"
+                                           for du, au in periodes)
+            if len(NOTES_DE_SUIVI[action].format(periodes=plates["periodes"])) > LONGUEUR_SUJET_NOTE:
+                plates["periodes"] = f"({len(periodes)} dates ou périodes)"   # le détail est dans le message
+        except ValueError:
+            pass
+    sujet = NOTES_DE_SUIVI[action].format_map({k: v for k, v in plates.items() if isinstance(v, str)})
+    sujet = sujet if len(sujet) <= LONGUEUR_SUJET_NOTE else sujet[:LONGUEUR_SUJET_NOTE - 1] + "…"
     if ordre_original.get("justification"):
         lignes.append(f"Motif (extrait du mail) : « {ordre_original['justification']} »")
     # Après un changement de nom, le client se retrouve sous son nouveau nom
@@ -771,6 +886,7 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
     donnees_plates = preparer_donnees(ordre)
     recette = CATALOGUE_ACTIONS[ordre["action"]]
     etat['anciennes_valeurs'] = {}  # Valeurs affichées AVANT modification, pour la note de suivi
+    etat['nombres_tables'] = {}     # Nombre total de lignes des tableaux vus, pour vérifier un ajout (ligne_presente)
     print(f"--- DÉBUT DE LA MISSION : {ordre['action']} ---")
 
     for index, etape in enumerate(recette, start=1):
@@ -783,9 +899,15 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
                 titre_actuel = soup_courante.title.string if soup_courante.title else ""
                 if cible["titre_page"].lower() in titre_actuel.lower():
                     break
-                print(f"🖱️ Clic sur le bouton : {cible['bouton']} (depuis '{titre_actuel.strip()}')")
+                bouton = cible['bouton']
+                if est_fiche_client(soup_courante):
+                    bouton = 'A3'   # Fiche client (pas de « page précédente ») : flèche retour vers la liste
+                elif bouton not in boutons_de_la_page(soup_courante) and not soup_courante.find(id=bouton):
+                    # Autre sous-page sans ce bouton (note, document) : flèche retour
+                    bouton = alias_par_image(soup_courante, IMAGE_BOUTON_RETOUR) or bouton
+                print(f"🖱️ Clic sur le bouton : {bouton} (depuis '{titre_actuel.strip()}')")
                 reponse, soup_courante = soumettre_page_webdev(session, url_courante, soup_courante,
-                                                              ajouter_cases_cochees({'WD_BUTTON_CLICK_': cible['bouton']}, soup_courante))
+                                                              ajouter_cases_cochees({'WD_BUTTON_CLICK_': bouton}, soup_courante))
                 url_courante = reponse.url
                 etat['url'], etat['soup'] = url_courante, soup_courante
             titre_actuel = soup_courante.title.string if soup_courante.title else ""
@@ -793,6 +915,14 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
                 print(f"🛑 ERREUR DE NAVIGATION : '{cible['titre_page']}' non atteint après {cible['max_clics']} clics (page '{titre_actuel}').")
                 sys.exit("Arrêt de sécurité.")
             print("✅ Navigation confirmée.")
+            continue
+
+        # Plusieurs dates / périodes de factures : recherche de chacune, puis téléchargement de toutes les trouvées
+        if "pour_chaque_periode" in etape:
+            print(f"\n--- ÉTAPE {index}/{len(recette)} ---")
+            url_courante, soup_courante = executer_pour_chaque_periode(etape["pour_chaque_periode"], ordre,
+                                                                       donnees_plates, session, url_courante,
+                                                                       soup_courante, etat)
             continue
 
         # 1. PRÉPARATION DE LA REQUÊTE
@@ -827,6 +957,23 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
                         payload_final[cle] = balise.get('value', '')
 
         print(f"\n--- ÉTAPE {index}/{len(recette)} ---")
+
+        # « Fiches client » s'appelle M11 sur la page Menu Général (M3 ailleurs) : même bouton, même page atteinte
+        if payload_final.get('WD_BUTTON_CLICK_') == 'M3' and soup_courante and not soup_courante.find(id='M3') \
+                and soup_courante.find(id='M11'):
+            payload_final['WD_BUTTON_CLICK_'] = 'M11'
+
+        # Liste déroulante choisie par le TEXTE de l'option (valeurs techniques différentes selon la base)
+        for champ, libelle in etape.get("choisir_par_libelle", {}).items():
+            liste = soup_courante.find('select', {'name': champ})
+            options = {re.sub(r'\s+', ' ', o.get_text()).strip().lower(): o.get('value', '')
+                       for o in (liste.find_all('option') if liste else [])}
+            valeur = options.get(re.sub(r'\s+', ' ', libelle).strip().lower())
+            if not valeur:
+                print(f"🛑 ERREUR : « {libelle} » introuvable dans la liste {champ} de la page (rien n'est enregistré).")
+                sys.exit("Arrêt de sécurité.")
+            payload_final[champ] = valeur
+            print(f"👉 {champ} : « {libelle} » (valeur {valeur} dans cette base)")
 
         # 2. RÉCAPITULATIF AVANT ENVOI
         donnees_utiles = {k: v for k, v in payload_final.items() if not k.startswith('WD_')}
@@ -956,7 +1103,25 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
             if type_audit in audit:
                 table = audit[type_audit]["table"]
                 critere = {col: formater(val, donnees_plates) for col, val in audit[type_audit]["critere"].items()}
-                trouvees, _ = chercher_lignes_table(str(soup_courante), table, critere)
+                trouvees, lignes_table = chercher_lignes_table(str(soup_courante), table, critere)
+                if type_audit == "ligne_presente" and not trouvees:
+                    # Texte long (ex. sujet de note) coupé par EGESYS à l'enregistrement : début identique accepté
+                    trouvees = [i for i, ligne in enumerate(lignes_table) if all(
+                        len(ligne.get(col, '').strip()) >= 20
+                        and str(val).strip().lower().startswith(ligne.get(col, '').strip().lower())
+                        for col, val in critere.items() if str(val).strip())]
+                    if trouvees:
+                        print(f"⚠️ Tableau {table} : ligne trouvée avec un texte coupé par EGESYS "
+                              f"({lignes_table[trouvees[0]]}).")
+                if type_audit == "ligne_presente" and not trouvees:
+                    # EGESYS n'envoie qu'une partie des lignes : la nouvelle ligne peut manquer à la lecture. Ajout
+                    # confirmé si le total annoncé a augmenté de 1 depuis la page précédente qui montrait ce tableau.
+                    avant = etat.get('nombres_tables', {}).get(table)
+                    apres = nombres_lignes_tables(soup_courante).get(table)
+                    if avant is not None and apres == avant + 1 and len(lignes_table) < apres:
+                        trouvees = [-1]
+                        print(f"⚠️ Tableau {table} : {len(lignes_table)} lignes envoyées sur {apres} ; ajout confirmé "
+                              f"par le nombre de lignes ({avant} → {apres}).")
                 if (type_audit == "ligne_presente") != bool(trouvees):
                     print(f"🛑 ÉCHEC D'ÉCRITURE : {len(trouvees)} ligne(s) {critere} dans le tableau {table} ({type_audit} attendue).")
                     sys.exit("Arrêt de sécurité.")
@@ -988,6 +1153,14 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
             balise = soup_courante.find('input', {'name': champ})
             etat.setdefault('lectures', {})[variable] = balise.get('value', '').strip() if balise else ''
 
+        # Lignes d'un tableau de résultats, relevées sans rien sélectionner ni télécharger (ex : factures d'une période)
+        if "collecter_lignes" in etape:
+            collecte = etape["collecter_lignes"]
+            trouvees, lignes = chercher_lignes_table(str(soup_courante), collecte["table"], collecte["critere"])
+            etat['collecte'] = [{cle: lignes[i].get(colonne, '').strip() for cle, colonne in collecte["colonnes"].items()}
+                                for i in trouvees]
+            print(f"✅ {len(etat['collecte'])} ligne(s) relevée(s) dans le tableau {collecte['table']}.")
+
         # 5. TÉLÉCHARGEMENT DU FICHIER GÉNÉRÉ PAR LE SERVEUR (ex: duplicata de facture)
         if "telechargement" in etape:
             telechargement = etape["telechargement"]
@@ -1009,12 +1182,138 @@ def executer_recette(ordre, session, url_courante, soup_courante, etat):
             etat.setdefault('fichiers', []).append(chemin_local)
             print(f"✅ SUCCÈS : Fichier enregistré : {chemin_local} ({len(contenu)} octets).")
 
+        # Nombre total de lignes des tableaux de cette page (vérification d'un ajout à une étape suivante)
+        etat.setdefault('nombres_tables', {}).update(nombres_lignes_tables(soup_courante))
+
         # 6. RECETTE RÉPÉTÉE POUR CHAQUE LIGNE TROUVÉE (ex : duplicata de toutes les factures d'une période)
         if "pour_chaque_ligne" in etape:
             url_courante, soup_courante = executer_pour_chaque_ligne(etape["pour_chaque_ligne"], ordre, donnees_plates,
                                                                      session, url_courante, soup_courante, etat)
 
     return url_courante, soup_courante
+
+
+def boutons_de_la_page(soup):
+    """{alias: image} des boutons WebDev de la page (même lecture que explorer.py) : l'alias (A3, A2, M3…) vient du
+    lien « _JSL(_PAGE_,'A3'… » s'il y en a un, sinon de l'id ; l'image vient de « background-image:url(…) » du style.
+    (Sur la fiche client, la flèche retour A3 n'a pas d'id « A3 » : la chercher par id ne la trouve pas.)"""
+    boutons = {}
+    for balise in (soup.find_all(['a', 'button', 'input']) if soup else []):
+        if balise.name == 'input' and (balise.get('type') or '').lower() not in ('button', 'submit', 'image'):
+            continue
+        lien = re.search(r"_JSL\(_PAGE_,'([^']+)'", balise.get('href', '') or '')
+        alias = lien.group(1) if lien else (balise.get('id') or '')
+        if not re.match(r'^[AMI]\d+$', alias):
+            continue
+        image = re.search(r"url\([^)]*?([^/()'\"]+\.(?:png|gif|jpg|jpeg|svg))", balise.get('style', '') or '')
+        if image or alias not in boutons:
+            boutons[alias] = image.group(1) if image else boutons.get(alias, '')
+    return boutons
+
+
+TABLE_NOTES = "A160"   # Tableau des notes : présent uniquement sur la fiche client
+
+
+def est_fiche_client(soup):
+    """La fiche client porte le même titre que la liste « Gestion des clients » ; elle seule contient le tableau
+    des notes. Sa flèche retour est A3 (son image diffère selon la base : on ne s'y fie pas)."""
+    return bool(soup) and f'DeclareChamp("{TABLE_NOTES}"' in str(soup)
+
+
+def nombres_lignes_tables(soup):
+    """{tableau: nombre TOTAL de lignes annoncé par EGESYS (attribut NOMBRE)}. EGESYS n'envoie qu'une partie des lignes
+    avec la page (32 sur 35 constaté le 19/11/2026) : ce total sert à vérifier un ajout quand la ligne n'est pas lue."""
+    nombres = {}
+    for table, xml in (declarations_champs(str(soup), 'WDTable').items() if soup else []):
+        trouve = re.search(r'<LISTE [^>]*NOMBRE="(\d+)"', xml)
+        if trouve:
+            nombres[table] = int(trouve.group(1))
+    return nombres
+
+
+def texte_bouton(soup, alias):
+    """Texte affiché du bouton (ex : « Enregistrer »), lu comme dans boutons_de_la_page ; "" si absent."""
+    for balise in (soup.find_all(['a', 'button', 'input']) if soup else []):
+        lien = re.search(r"_JSL\(_PAGE_,'([^']+)'", balise.get('href', '') or '')
+        if (lien.group(1) if lien else balise.get('id')) == alias:
+            texte = re.sub(r'\s+', ' ', balise.get_text(" ") or balise.get('value', '') or '').strip()
+            if texte:
+                return texte
+    return ""
+
+
+def alias_par_image(soup, image):
+    """Alias du bouton qui porte cette image (ex : flèche retour), sinon None."""
+    return next((alias for alias, img in boutons_de_la_page(soup).items() if img == image), None)
+
+
+def revenir_a_l_accueil(session, url_courante, soup_courante, etat):
+    """Entre deux ordres : retour à l'accueil (Tableau de bord ; le Menu Général convient aussi), pour que l'ordre
+    suivant parte toujours du même point. Renvoie (session, url, soup) : la session peut changer (reconnexion).
+
+    Comme à la main : sur la fiche client (même titre que la liste « Gestion des clients »), « Enregistrer » (A4),
+    puis flèche retour (A3) si la fiche est encore affichée ; puis la maison (A2) jusqu'au Tableau de bord. Les clics
+    de navigation envoient TOUT le formulaire de la page, comme un navigateur (après un « Enregistrer », la maison
+    envoyée seule ne faisait rien, constaté le 19/11/2026). Si la maison ne change toujours rien : déconnexion puis
+    reconnexion, qui ramène toujours au Tableau de bord."""
+    def titre(soup):
+        return (soup.title.string or "").strip() if soup and soup.title else ""
+
+    def signature(soup):      # même page ? (titre, boutons, fiche ou non)
+        return titre(soup), tuple(sorted(boutons_de_la_page(soup))), est_fiche_client(soup)
+
+    clics, sans_effet = [], 0
+    for _ in range(CLICS_RETOUR_ACCUEIL):
+        actuel = titre(soup_courante)
+        if any(t in actuel.lower() for t in TITRES_ACCUEIL):
+            print(f"🏠 Retour à l'accueil : « {actuel} ».")
+            return session, url_courante, soup_courante
+        presents = boutons_de_la_page(soup_courante)
+
+        def present(alias):
+            return alias in presents or bool(soup_courante.find(id=alias))
+        fiche = est_fiche_client(soup_courante)
+        if fiche and 'A4' not in clics and texte_bouton(soup_courante, 'A4').lower() == 'enregistrer':
+            bouton = 'A4'      # fiche client : « Enregistrer » d'abord (comme à la main après une note)
+        elif fiche and present('A3') and clics.count('A3') < 2:
+            bouton = 'A3'      # fiche encore affichée : flèche retour → liste des clients
+        else:
+            bouton = (alias_par_image(soup_courante, IMAGE_BOUTON_RETOUR)            # sous-page (note, document)
+                      or ('A2' if present('A2') and sans_effet < 2 else None)       # maison
+                      or ('M3' if present('M3') and 'M3' not in clics else None))
+        if not bouton:
+            break
+        clics.append(bouton)
+        print(f"🖱️ Retour vers l'accueil : clic sur {bouton} (depuis « {actuel} »)")
+        if bouton == 'A4':      # Enregistrer : même envoi que les recettes de modification
+            donnees = ajouter_cases_cochees({'WD_BUTTON_CLICK_': bouton}, soup_courante)
+        else:                   # navigation : formulaire complet, comme un navigateur
+            donnees = dict(valeurs_formulaire(soup_courante), WD_BUTTON_CLICK_=bouton)
+        avant = signature(soup_courante)
+        reponse, soup_courante = soumettre_page_webdev(session, url_courante, soup_courante, donnees)
+        url_courante = reponse.url
+        etat['url'], etat['soup'] = url_courante, soup_courante
+        if bouton == 'A2' and signature(soup_courante) == avant:
+            sans_effet += 1
+            print(f"   (la maison n'a rien changé : {sans_effet}/2)")
+            if sans_effet >= 2:
+                break           # inutile d'insister : reconnexion ci-dessous
+
+    # Dernier recours : déconnexion + reconnexion (on arrive toujours sur le Tableau de bord)
+    identifiants = etat.get('identifiants')
+    if identifiants:
+        print(f"🔄 Accueil non atteint depuis « {titre(soup_courante)} » : déconnexion puis reconnexion.")
+        print(f"   Boutons de la page : {boutons_de_la_page(soup_courante) or 'aucun'}")
+        deconnexion_egesys(session, url_courante, soup_courante)
+        session, url_courante, soup_courante = connexion_egesys(*identifiants)
+        etat['url'], etat['soup'] = url_courante, soup_courante
+        if any(t in titre(soup_courante).lower() for t in TITRES_ACCUEIL):
+            print(f"🏠 Reconnecté : « {titre(soup_courante)} ».")
+            return session, url_courante, soup_courante
+    print(f"🛑 ERREUR DE NAVIGATION : retour à l'accueil (Tableau de bord) impossible (page « {titre(soup_courante)} »).")
+    # Diagnostic : boutons lus sur la page (alias → image), pour corriger la détection si la page a changé
+    print(f"   Boutons de la page : {boutons_de_la_page(soup_courante) or 'aucun'}")
+    sys.exit("Arrêt de sécurité.")
 
 
 def ajouter_cases_cochees(payload, soup):
@@ -1105,6 +1404,98 @@ def executer_pour_chaque_ligne(boucle, ordre, donnees_plates, session, url_coura
     return url_courante, soup_courante
 
 
+def executer_pour_chaque_periode(boucle, ordre, donnees_plates, session, url_courante, soup_courante, etat):
+    """Factures validées de plusieurs dates précises et/ou périodes : chaque date / période est recherchée (recette
+    boucle["recherche"]) ; une date sans facture est notée dans etat['manquantes'] (avec les factures les plus proches)
+    SANS arrêter la demande. Puis chaque facture trouvée est téléchargée (recette boucle["action"]).
+    Arrêt de sécurité, sans rien télécharger : aucune facture du tout, plus de boucle["max"] factures, ou factures de
+    plusieurs clients."""
+    dernieres = int(lire_nombre_dernieres(formater(boucle.get("dernieres", ""), donnees_plates)) or 0)
+    texte = formater(boucle["periodes"], donnees_plates).strip()
+    if texte or not dernieres:
+        periodes = lire_periodes_ou_arret(texte)
+    else:   # « Ses 3 dernières factures », sans date : toutes les factures du client, les plus récentes retenues
+        periodes = [(DEBUT_HISTORIQUE, datetime.now().date())]
+    client = {"activite_actuelle": ordre.get("activite_actuelle", "0"), "nom_client": ordre.get("nom_client", ""),
+              "code_client": ordre.get("code_client", ""), "justification": ordre.get("justification", "")}
+
+    def rechercher(du, au):
+        nonlocal url_courante, soup_courante
+        etat['collecte'] = []
+        sous_ordre = {"action": boucle["recherche"], **client,
+                      "factures": {"periode_du": du.strftime("%d/%m/%Y"), "periode_au": au.strftime("%d/%m/%Y")}}
+        url_courante, soup_courante = executer_recette(sous_ordre, session, url_courante, soup_courante, etat)
+        return [ligne for ligne in etat.pop('collecte', []) if ligne.get("numero")]
+
+    retenues, manquantes = {}, []          # n° de facture → ligne (sans doublon, dans l'ordre de recherche)
+    for du, au in periodes:
+        libelle = libelle_periode(du, au) if texte else "de toutes les dates"
+        print(f"\n••• Recherche des factures {libelle} •••")
+        trouvees = rechercher(du, au)
+        if trouvees:
+            print(f"✅ {libelle} : {len(trouvees)} facture(s) : {', '.join(l['numero'] for l in trouvees)}")
+            for ligne in trouvees:
+                retenues.setdefault(ligne["numero"], ligne)
+            continue
+        if not texte:
+            break   # Aucune facture du tout pour ce client : arrêt de sécurité ci-dessous
+        # Rien : on regarde autour (± marge) pour proposer les factures les plus proches, sans les télécharger
+        marge = timedelta(days=boucle.get("marge_proches_jours", 15))
+        proches = rechercher(du - marge, min(au + marge, datetime.now().date()))
+        raison = "aucune facture validée à cette date" if du == au else "aucune facture validée sur cette période"
+        if proches:
+            raison += " (factures les plus proches : " + ", ".join(
+                f"n° {l['numero']} du {l.get('date', '?')}" for l in proches[:3]) + ")"
+        manquantes.append({"periode": libelle, "raison": raison})
+        print(f"⚠️ {libelle} : {raison}")
+    clients = {ligne.get("client", "") for ligne in retenues.values()} - {''}
+    if dernieres and retenues and len(clients) <= 1:
+        # Les N plus récentes : tri par date de facture décroissante (ordre du tableau gardé à date égale ou illisible)
+        rang_tableau = {numero: i for i, numero in enumerate(retenues)}
+        triees = sorted(retenues.values(), key=lambda l: (date_facture(l) or DEBUT_HISTORIQUE,
+                                                          -rang_tableau[l["numero"]]), reverse=True)
+        retenues = {l["numero"]: l for l in triees[:dernieres]}
+        print(f"✅ {libelle_dernieres(dernieres).capitalize()} : " + ", ".join(
+            f"n° {l['numero']} du {l.get('date', '?')}" for l in retenues.values()))
+        if len(retenues) < dernieres:
+            manque = {"periode": libelle_dernieres(dernieres), "nombre_demande": dernieres,
+                      "raison": f"seulement {len(retenues)} facture(s) validée(s) trouvée(s)"
+                                + (" sur les dates demandées" if texte else " pour ce client")}
+            manquantes.append(manque)
+            print(f"⚠️ {manque['periode']} : {manque['raison']}")
+    etat['manquantes'] = manquantes
+
+    if not retenues:
+        if not texte:
+            print("🛑 AUCUNE FACTURE validée n'a été trouvée pour ce client.")
+            print("   Par sécurité, aucune facture n'est téléchargée : vérifiez le client.")
+            sys.exit("Arrêt de sécurité.")
+        print("🛑 AUCUNE FACTURE ne correspond aux dates demandées :")
+        for manque in manquantes:
+            print(f"🛑 Aucune facture {manque['periode']} : {manque['raison']}")
+        print("   Par sécurité, aucune facture n'est téléchargée : vérifiez le client et les dates.")
+        sys.exit("Arrêt de sécurité.")
+    if len(clients) > 1:
+        print(f"🛑 Les factures trouvées appartiennent à {len(clients)} clients différents ({', '.join(sorted(clients))}).")
+        print("   Par sécurité, aucune facture n'est téléchargée : précisez le code client.")
+        sys.exit("Arrêt de sécurité.")
+    if len(retenues) > boucle["max"]:
+        print(f"🛑 {len(retenues)} FACTURES correspondent aux dates demandées (maximum {boucle['max']}).")
+        print("   Par sécurité, aucune facture n'est téléchargée : réduisez les périodes.")
+        sys.exit("Arrêt de sécurité.")
+
+    code_client = next(iter(clients)) if clients else ordre.get("code_client", "")
+    for rang, numero in enumerate(retenues, start=1):
+        print(f"\n••• Facture {rang}/{len(retenues)} : {numero} •••")
+        sous_ordre = {"action": boucle["action"], "justification": ordre.get("justification", ""),
+                      "activite_actuelle": ordre.get("activite_actuelle", "0"),
+                      # Client désigné par son code exact (lu dans le tableau) : aucune ambiguïté sur le nom
+                      "nom_client": "" if code_client else ordre.get("nom_client", ""), "code_client": code_client,
+                      boucle["dossier"]: {boucle["variable"]: numero}}
+        url_courante, soup_courante = executer_recette(sous_ordre, session, url_courante, soup_courante, etat)
+    return url_courante, soup_courante
+
+
 class SuiviErreurs:
     """Recopie l'affichage à l'écran et garde les messages d'arrêt (🛑) de l'ordre en cours, pour le journal Excel."""
     def __init__(self, flux):
@@ -1174,7 +1565,8 @@ if __name__ == "__main__":
         sys.exit("🛑 ERREUR : Variables d'environnement EGESYS_IDENTIFIANT et EGESYS_MDP non définies.")
     verrou = prendre_verrou()
     session, url_courante, soup_courante = connexion_egesys(identifiant, mot_de_passe)
-    etat = {'url': url_courante, 'soup': soup_courante}
+    # identifiants : seulement en mémoire, pour une reconnexion de secours entre deux ordres (jamais affichés)
+    etat = {'url': url_courante, 'soup': soup_courante, 'identifiants': (identifiant, mot_de_passe)}
     resultats = [{"numero": numero, "action": ordre.get("action", ""), "client": client_de(ordre),
                   "resultat": "Non exécuté", "detail": "Arrêt sur un ordre précédent.", "modification": ""}
                  for numero, ordre in enumerate(ordres, start=1)]
@@ -1209,13 +1601,24 @@ if __name__ == "__main__":
             modification = "\n".join(lignes_modification(ordre_original, {}))  # Valeurs demandées, si arrêt
             nb_fichiers_avant = len(etat.get('fichiers', []))
             etat.pop('activite_client', None)  # Catégorie (actif / inactif) où le client de CET ordre sera trouvé
+            etat.pop('manquantes', None)       # Dates / périodes sans facture de CET ordre (plusieurs factures)
             try:
+                if numero > 1:   # Ordre suivant : repart de l'accueil (sinon risque de rester sur la fiche client)
+                    etape_en_cours = "retour à l'accueil"
+                    session, url_courante, soup_courante = revenir_a_l_accueil(session, url_courante, soup_courante,
+                                                                               etat)
+                    etape_en_cours = "exécution"
                 url_courante, soup_courante = executer_recette(ordre, session, url_courante, soup_courante, etat)
                 modification = "\n".join(lignes_modification(ordre_original, etat.get('anciennes_valeurs', {})))
                 # Duplicatas : la "modification" de l'ordre = les PDF récupérés (réponse au mail, journal Excel)
                 fichiers_ordre = etat.get('fichiers', [])[nb_fichiers_avant:]
+                manquantes = etat.pop('manquantes', [])
                 if fichiers_ordre:
-                    modification = "\n".join(f"Duplicata PDF récupéré : {os.path.basename(f)}" for f in fichiers_ordre)
+                    modification = "\n".join(
+                        [f"Duplicata PDF récupéré : {os.path.basename(f)}" for f in fichiers_ordre]
+                        + [f"Non trouvée : {m['periode']} : {m['raison']}" for m in manquantes])
+                if manquantes:
+                    resultats[numero - 1]["manquantes"] = manquantes
                 detail = ""
                 note = note_de_suivi(ordre_original, etat.get('anciennes_valeurs', {}), fichiers_ordre)
                 etat['lectures'] = {}  # Adresse mail lue sur la fiche pendant la note de suivi (factures)

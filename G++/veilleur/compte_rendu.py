@@ -12,13 +12,14 @@ import re
 from datetime import datetime
 from html import escape
 
-from ordres_genicia import libelle_action
+from ordres_genicia import libelle_action, libelle_dernieres, libelle_periode, lire_periodes
 
 PREFIXE_OBJET = "GENICIA++ : "
 PIED_DE_PAGE = "Message généré automatiquement par l'automate GENICIA++ de SOGEN."   # repéré par l'agent (boucle)
 
 LIBELLES_CHAMPS = {"cheptel": "N° de cheptel", "nom_eleveur": "Éleveur", "date_facture": "Date de la facture",
-                   "periode_du": "Début de la période", "periode_au": "Fin de la période", "profil": "Profil web"}
+                   "periodes": "Dates des factures", "nombre_dernieres": "Nombre de dernières factures",
+                   "profil": "Profil web"}
 ACTIONS_FACTURES = ("telecharger_facture", "telecharger_factures")
 
 # Mise en forme HTML du mail (styles en ligne et tableaux : seule forme bien rendue par Outlook)
@@ -38,7 +39,10 @@ RAISON_INTERROMPU = ("Le traitement a été interrompu (ordinateur ou programme 
                      "de savoir si cette demande a été faite : vérifiez dans GENICIA++.")
 RAISON_FACTURE_INTROUVABLE = ("Aucune facture n'existe à cette date pour cet éleveur : rien n'a été récupéré pour "
                               "éviter une erreur.")
-RAISON_PERIODE_SANS_FACTURE = "Aucune facture n'existe sur cette période pour cet éleveur : rien n'a été récupéré."
+RAISON_PERIODE_SANS_FACTURE = ("Aucune facture n'existe aux dates demandées pour cet éleveur : rien n'a été "
+                               "récupéré.")
+MOTIF_FACTURES_MANQUANTES = ("Les duplicatas trouvés sont joints à ce mail. Pour les dates marquées « Non trouvée », "
+                             "aucune facture n'existe dans GENICIA++ : la raison est indiquée.")
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -53,6 +57,8 @@ def nettoyer(texte):
 
 
 def libelle_champ(champ):
+    if " ou " in champ:          # champ obligatoire au choix : « cheptel ou nom_eleveur »
+        return " ou ".join(libelle_champ(c) for c in champ.split(" ou "))
     return LIBELLES_CHAMPS.get(champ, champ.replace("_", " "))
 
 
@@ -76,13 +82,11 @@ def traduire_erreur_validation(texte):
     futur = re.match(r"date de facture dans le futur : '(.*?)'", texte)
     if futur:
         return f"La date de facture « {futur.group(1)} » est dans le futur."
-    date = re.match(r"date de période invalide : '(.*?)'", texte)
-    if date:
-        return f"La date « {date.group(1)} » de la période n'est pas une date valide (attendu : JJ/MM/AAAA)."
-    periode = re.match(r"période (inversée|dans le futur) : du '(.*?)' au '(.*?)'", texte)
-    if periode:
-        probleme = "commence après sa fin" if periode.group(1) == "inversée" else "est dans le futur"
-        return f"La période du « {periode.group(2)} » au « {periode.group(3)} » {probleme}."
+    dates = re.match(r"dates de factures invalides : (.*)$", texte)
+    if dates:
+        aide = (" (attendu : JJ/MM/AAAA pour une date, JJ/MM/AAAA au JJ/MM/AAAA pour une période)"
+                if "n'est ni une date" in texte or "n'existe pas" in texte else "")
+        return f"Les dates de factures demandées sont incorrectes : {dates.group(1)}{aide}."
     valeur = re.match(r"'(.+?)' = '(.*?)' n'est pas une valeur autorisée", texte)
     if valeur:
         return f"La valeur « {valeur.group(2)} » n'existe pas dans GENICIA++ pour « {libelle_champ(valeur.group(1))} »."
@@ -98,6 +102,10 @@ def traduire_erreur_execution(detail):
         explication = "Le programme n'a pas pu ouvrir GENICIA++ ou s'y connecter : rien n'a été fait."
     elif "Délai d'exécution dépassé" in detail:
         explication = "GENICIA++ ne répondait plus : l'exécution a été arrêtée par sécurité."
+    elif re.search(r"Plusieurs éleveurs|Aucun éleveur trouvé|Champ du nom introuvable|N° de cheptel illisible",
+                   detail):
+        explication = ("L'éleveur n'a pas pu être identifié par son nom dans GENICIA++ (aucun ou plusieurs éleveurs "
+                       "possibles) : rien n'a été fait. Indiquez son n° de cheptel.")
     elif re.search(r"Cheptel \S+ absent des résultats|Éleveur \S+ : l'écran suivant", detail):
         explication = "L'éleveur n'a pas été trouvé dans GENICIA++ avec ce n° de cheptel."
     elif "Boîte de dialogue ouverte" in detail or "boîte de dialogue s'est ouverte" in detail:
@@ -109,6 +117,9 @@ def traduire_erreur_execution(detail):
     elif "Trop de factures" in detail:
         explication = ("Il y a trop de factures sur cette période pour une seule demande : rien n'a été récupéré. "
                        "Renvoyez la demande avec une période plus courte.")
+    elif "n'est pas pris en compte" in detail:
+        explication = ("GENICIA++ n'a pas réagi à un clic malgré plusieurs essais : l'exécution a été arrêtée par "
+                       "sécurité, sans rien valider.")
     elif "premier plan" in detail:
         explication = ("GENICIA++ n'a pas pu être mis au premier plan (poste utilisé ou session verrouillée ?) : "
                        "l'exécution a été arrêtée par sécurité.")
@@ -143,11 +154,24 @@ def eleveur_lisible(ordre):
     return f"éleveur {nom.upper()} (cheptel non précisé)" if nom else "éleveur non précisé"
 
 
+def dates_lisibles(periodes, nombre_dernieres=""):
+    """« 31/01/2026 ; 01/03/2026 au 31/03/2026 » → « le 31/01/2026 ; du 01/03/2026 au 31/03/2026 » (texte brut si
+    illisible). Avec un nombre de dernières factures : « les 3 dernières factures (…) »."""
+    try:
+        dates = " ; ".join(libelle_periode(du, au) for du, au in lire_periodes(periodes)) if str(periodes or "").strip() else ""
+    except ValueError:
+        dates = str(periodes or "").strip()
+    nombre = str(nombre_dernieres or "").strip()
+    if nombre.isdigit() and int(nombre) > 0:
+        return libelle_dernieres(nombre) + (f" ({dates})" if dates else "")
+    return dates
+
+
 def valeurs_demandees(ordre):
     if ordre.get("action") == "telecharger_facture":
         return [f"Date de la facture : « {ordre.get('date_facture') or 'non précisée'} »"]
     if ordre.get("action") == "telecharger_factures":
-        return [f"Toutes les factures du « {ordre.get('periode_du') or '?'} » au « {ordre.get('periode_au') or '?'} »"]
+        return [f"Factures demandées : « {dates_lisibles(ordre.get('periodes', ''), ordre.get('nombre_dernieres', '')) or 'non précisées'} »"]
     if ordre.get("action") == "generer_espace_adherent":
         return [f"Profil web : « {ordre.get('profil') or 'ELWEB1 STANDARD'} »",
                 "Identifiants envoyés par mail à l'éleveur (adresse de sa fiche)",
@@ -214,7 +238,8 @@ def bloc_demande(index, action, eleveur, libelle, valeurs, motif, ton):
         morceaux.append(paragraphe(f'<b style="color:{couleur};">Raison :</b> {e(motif["texte"])}',
                                    "margin-left:18px;"))
         if motif["candidates"]:
-            morceaux.append(paragraphe("<u>Factures possibles</u> :", "margin-left:36px;"))
+            titre = "Détail par date" if motif["texte"] == RAISON_PERIODE_SANS_FACTURE else "Factures possibles"
+            morceaux.append(paragraphe(f"<u>{titre}</u> :", "margin-left:36px;"))
             morceaux.append(liste([e(c) for c in motif["candidates"]], marge=54))
         if motif["technique"]:
             morceaux.append(paragraphe(f"<i>Détail technique : {e(motif['technique'])}</i>",
@@ -255,6 +280,7 @@ def rediger(code, controle, resultats_execution=None):
     resume = controle.get("resume", "")
 
     executees, non_executees, a_verifier = [], [], []
+    incompletes = 0       # demandes de factures exécutées, mais avec des dates sans facture
     for numero, ordre in enumerate(ordres, start=1):
         entete = (libelle_action(ordre.get('action')), eleveur_lisible(ordre))
         demande = valeurs_demandees(ordre)
@@ -264,7 +290,10 @@ def rediger(code, controle, resultats_execution=None):
             a_verifier.append((*entete, demande, raison(RAISON_INTERROMPU)))
         elif resultat.get("resultat") == "Réussite":
             faits = resultat.get("modification", "").splitlines() or demande
-            if ordre.get("action") in ACTIONS_FACTURES and resultat.get("fichiers"):
+            if resultat.get("manquantes"):
+                motif = raison(MOTIF_FACTURES_MANQUANTES)
+                incompletes += 1
+            elif ordre.get("action") in ACTIONS_FACTURES and resultat.get("fichiers"):
                 motif = raison("Les duplicatas PDF sont joints à ce mail." if len(resultat["fichiers"]) > 1
                                else "Le duplicata PDF est joint à ce mail.")
             elif not resultat.get("modification") and resultat.get("detail"):
@@ -278,8 +307,10 @@ def rediger(code, controle, resultats_execution=None):
                 motif = raison("Pas tentée : l'exécution s'est arrêtée sur une demande précédente.")
             elif detail.startswith("Aucune facture au"):
                 motif = raison(RAISON_FACTURE_INTROUVABLE, candidates=factures_possibles(detail))
-            elif detail.startswith("Aucune facture du"):
-                motif = raison(RAISON_PERIODE_SANS_FACTURE)
+            elif detail.startswith(("Aucune facture du", "Aucune facture pour les dates")):
+                # « Aucune facture pour les dates demandées : le X : raison ; du … au … : raison »
+                details = detail.split(" : ", 1)[1].split(" ; ") if "dates demandées : " in detail else []
+                motif = raison(RAISON_PERIODE_SANS_FACTURE, candidates=details)
             else:
                 motif = raison(*traduire_erreur_execution(detail))
             non_executees.append((*entete, demande, motif))
@@ -299,6 +330,10 @@ def rediger(code, controle, resultats_execution=None):
         ton = "erreur"
     elif not ordres:
         bilan = "rien n'a été fait dans GENICIA++ : aucune demande exploitable n'a été trouvée dans le mail."
+        ton = "attention"
+    elif len(executees) == total and incompletes:
+        bilan = ("les factures trouvées sont jointes, mais certaines dates demandées n'ont pas de facture "
+                 "(voir « Non trouvée » ci-dessous).")
         ton = "attention"
     elif len(executees) == total:
         bilan = f"tout a été fait ({total} demande{'s' if total > 1 else ''} exécutée{'s' if total > 1 else ''})."
@@ -345,10 +380,12 @@ def rediger(code, controle, resultats_execution=None):
     if incertitudes:
         conseils.append("<b>Répondez à ce mail</b> en précisant les points à clarifier ci-dessus pour que la demande "
                         "soit relancée, ou faites l'opération directement dans GENICIA++.")
-    if any(motif["candidates"] or motif["texte"] == RAISON_FACTURE_INTROUVABLE for motif in motifs):
+    if any(motif["texte"] == RAISON_FACTURE_INTROUVABLE
+           or (motif["candidates"] and motif["texte"] != RAISON_PERIODE_SANS_FACTURE) for motif in motifs):
         conseils.append("<b>Renvoyez la demande</b> avec la date exacte de la facture (voir les factures possibles).")
-    if any(motif["texte"] == RAISON_PERIODE_SANS_FACTURE for motif in motifs):
-        conseils.append("<b>Vérifiez la période</b> dans le bilan de l'éleveur (GENICIA++) puis renvoyez la demande.")
+    if any(motif["texte"] == RAISON_PERIODE_SANS_FACTURE for motif in motifs) or incompletes:
+        conseils.append("<b>Vérifiez les dates sans facture</b> dans le bilan de l'éleveur (GENICIA++) puis, si "
+                        "besoin, renvoyez la demande avec les bonnes dates.")
     if any(motif["technique"] or "Pas tentée" in motif["texte"] for motif in motifs) or a_verifier:
         conseils.append("<b>Vérifiez dans GENICIA++</b> : les demandes non exécutées peuvent être refaites à la main "
                         "ou renvoyées.")
@@ -367,6 +404,8 @@ def rediger(code, controle, resultats_execution=None):
     # --- Objet du mail de réponse, selon le résultat ---
     if a_verifier:
         objet = "Traitement interrompu, à vérifier dans GENICIA++"
+    elif ordres and len(executees) == total and incompletes:
+        objet = "Demande traitée, factures manquantes"
     elif ordres and len(executees) == total:
         objet = "Demande traitée"
     elif executees:
@@ -421,15 +460,18 @@ def mail_client(resultats, pdf):
 
     cheptel = ordres[0].get("cheptel", "")
     periode = ordres[0] if len(ordres) == 1 and ordres[0].get("action") == "telecharger_factures" else None
-    if periode:      # une demande « toutes les factures de la période »
-        du_au = f"du {periode.get('periode_du', '')} au {periode.get('periode_au', '')}"
+    manquantes = [m for r in ordres for m in (r.get("manquantes") or []) if not m.get("nombre_demande")]
+    # « Ses 20 dernières factures » alors que l'éleveur n'en a que 13 : on le dit simplement
+    incomplets = [m for r in ordres for m in (r.get("manquantes") or []) if m.get("nombre_demande")]
+    if periode:      # une demande « toutes les factures de ces dates / périodes »
+        quand = dates_lisibles(periode.get("periodes", ""), periode.get("nombre_dernieres", "")).replace(" ; ", ", ")
         if len(factures) == 1:
             objet = f"{OBJET_CLIENT}duplicata de votre facture du {factures[0][1]}"
-            suite = "Une seule facture correspond à cette période, vous la trouverez en pièce jointe de ce mail :"
+            suite = "Vous trouverez la facture correspondante en pièce jointe de ce mail :"
         else:
-            objet = f"{OBJET_CLIENT}duplicatas de vos factures {du_au}"
-            suite = f"Vous trouverez les {len(factures)} factures de cette période en pièces jointes de ce mail :"
-        demande = (f"Vous nous avez demandé les duplicatas de vos factures {e(du_au)} (cheptel n° {e(cheptel)}). "
+            objet = f"{OBJET_CLIENT}duplicatas de vos factures"
+            suite = f"Vous trouverez les {len(factures)} factures correspondantes en pièces jointes de ce mail :"
+        demande = (f"Vous nous avez demandé les duplicatas de vos factures ({e(quand)}, cheptel n° {e(cheptel)}). "
                    + suite)
     elif len(factures) == 1:
         objet = f"{OBJET_CLIENT}duplicata de votre facture du {factures[0][1]}"
@@ -443,6 +485,11 @@ def mail_client(resultats, pdf):
              + paragraphe("Bonjour,", "margin-bottom:10px;")
              + paragraphe(demande)
              + liste([e(f"Facture n° {numero} du {date}") for numero, date in factures])
+             + (paragraphe("Nous n'avons trouvé aucune facture "
+                           + e(", ".join(m["periode"] for m in manquantes)) + ".", "margin-top:10px;")
+                if manquantes else "")
+             + "".join(paragraphe(f"Vous nous aviez demandé {e(m['periode'])} : nous n'en avons trouvé que "
+                                  f"{len(factures)}.", "margin-top:10px;") for m in incomplets[:1])
              + (paragraphe(PHRASE_ESPACE_CREE, "margin-top:10px;")
                 if any((r.get("espace_adherent") or {}).get("statut") == "cree" for r in ordres) else "")
              + paragraphe(f"Cordialement,<br>{e(SIGNATURE_CLIENT)}", "margin-top:10px;")

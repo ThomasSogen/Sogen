@@ -27,7 +27,7 @@ VERROU_EXECUTION = FLUX / "execution.lock"
 FILE_ATTENTE = FLUX / "file_attente"
 ATTENTE_MAX = 3600          # secondes : au-delà, on abandonne (GENICIA++ occupé anormalement longtemps)
 INTERVALLE = 2              # secondes entre deux vérifications
-INTERVALLE_MESSAGE = 60     # une ligne « en attente » par minute
+INTERVALLE_MESSAGE = 30     # une ligne « en attente » toutes les 30 s (veilleur : arrêt après 1 min sans ligne)
 MARQUEUR_ATTENTE = "⏳ GENICIA++ occupé"      # lus par le veilleur (veilleur_genicia.py) : ne pas modifier
 MARQUEUR_TOUR = "▶️ Tour GENICIA++ obtenu"
 

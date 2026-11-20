@@ -45,8 +45,8 @@ contient de vraies données clients).
 |---|---|
 | `workflow/workflow.py` | Surveille `<OneDrive Sogen>\EGESYS\pending` (trouvé automatiquement, voir `config_egesys.py`) toutes les 5 s. Un seul PC à la fois (`workflow/poste_actif.py`). Attend la synchro et les pièces jointes, valide, bloque IBAN/BIC, déplace dans `processing/`, lance `script_egesys.py`, publie dans `completed/` ou `error/` (écriture atomique), copie les PDF récupérés dans `result/pdf/`, puis écrit `result/<nom>.json` en dernier (clé `pdf` = PDF à joindre). Ne relance jamais un fichier trouvé dans `processing/` (→ `error/`, code INTERROMPU). Une seule instance (`%LOCALAPPDATA%\EGESYS\workflow.lock`). Contient aussi `lancer`, `notifier` (toast Windows), `contient_banque`, `journaliser_blocage`. |
 | `workflow/poste_actif.py` | Un seul PC à la fois : fichier `EGESYS\_poste_actif.json` du OneDrive (PC, signe de vie toutes les 60 s par une tâche de fond, périmé après 5 min). Refus de démarrer si un autre PC est actif ; arrêt si un autre PC a repris. **Copie identique** de `G++\veilleur\poste_actif.py` : modifier les deux. |
-| `workflow/compte_rendu.py` | Réponse au mail : `rediger()` → `{"objet", "corps"}`, corps en HTML à styles en ligne (tableaux pour les encadrés, seule forme fiable dans Outlook). Traduit les messages techniques en français clair. `mail_client()` (17/11/2026) → `"client": {mail, objet, corps}` de `result/<nom>.json` : mail AU CLIENT avec ses duplicatas (mêmes PDF que `pdf`), à l'adresse A205 de sa fiche, lue par l'étape `"lire"` de la recette `ajouter_note_client` (note de suivi) et rangée dans le résultat de l'ordre (`mail_client`, `factures`). Vide si pas de facture, pas d'adresse valide ou plusieurs clients. Objet « SOGEN : … » (jamais « EGESYS »). Lecture A205 testée en lecture seule sur brana ; exécution complète (avec note) à faire lancer par l'utilisateur. |
-| `valider_ordres.py` | Validation hors ligne (structure, listes, obligatoires, IBAN clé de contrôle, RUM, pièces jointes, incertitudes). Écrit `<fichier>_valide.json`. `lire_id_message` / `lire_expediteur` lisent ces clés même dans un JSON cassé. |
+| `workflow/compte_rendu.py` | Réponse au mail : `rediger()` → `{"objet", "corps"}`, corps en HTML à styles en ligne (tableaux pour les encadrés, seule forme fiable dans Outlook). Traduit les messages techniques en français clair. `mail_client()` (17/11/2026) → `"client": {mail, objet, corps}` de `result/<nom>.json` : mail AU CLIENT avec ses duplicatas (mêmes PDF que `pdf`), à l'adresse A205 de sa fiche, lue par l'étape `"lire"` de la recette `ajouter_note_client` (note de suivi) et rangée dans le résultat de l'ordre (`mail_client`, `factures`). Vide si pas de facture, pas d'adresse valide ou plusieurs clients. Objet « SOGEN : … » (jamais « EGESYS »). Testé en réel par l'utilisateur (« ça fonctionne très bien »). Plusieurs dates (19/11/2026) : `dates_lisibles()` ; résultat d'ordre `manquantes` → `rediger` compte les demandes « incomplètes » (objet « Demande traitée, factures manquantes », MOTIF_FACTURES_MANQUANTES, conseil « Vérifiez les dates sans facture ») ; aucune facture → RAISON_DATES_SANS_FACTURE avec « Détail par date » (lignes « 🛑 Aucune facture le … : raison » du script) ; `mail_client` rappelle les dates et ajoute « Nous n'avons trouvé aucune facture le … ». |
+| `valider_ordres.py` | Validation hors ligne (structure, listes, obligatoires, IBAN clé de contrôle, RUM, dates des factures, pièces jointes, incertitudes). Écrit `<fichier>_valide.json`. `lire_id_message` / `lire_expediteur` lisent ces clés même dans un JSON cassé. `verifier_structure` convertit l'ancien format factures `periode_du`/`periode_au` en `periodes`. |
 | `lancer_workflow.ps1` + `lancer_workflow.bat` | Options `-Identifiants` (variables utilisateur, saisie masquée), `-Installer`/`-Desinstaller` (raccourci dans `shell:startup`), `-Etat`, `-Arreter` ; sans option = lancement caché, une seule instance, log ajouté à `%LOCALAPPDATA%\EGESYS\workflow.log`. Le `.ps1` doit garder son BOM UTF-8 (sinon PowerShell 5.1 lit mal les accents). |
 
 ### Agent Copilot (no-code, côté Microsoft 365)
@@ -56,8 +56,8 @@ contient de vraies données clients).
 | `copilot/egesys-modeles-json/SKILL.md` | **Compétence de l'agent, à charger comme fichier.** GÉNÉRÉ par `generer_doc_copilot.py` — ne pas éditer à la main. |
 | `generer_doc_copilot.py` | Génère le SKILL.md depuis `CATALOGUE_ACTIONS` + `MAPPING_*` + `copilot/exemples_egesys.md`. À relancer après toute évolution. |
 | `copilot/exemples_egesys.md` | Exemples de mails traités (données fictives). Repris dans le SKILL.md. |
-| `copilot/tests/mails_de_test.md` | 26 mails de test + résultat attendu décrit sous chacun. |
-| `copilot/tests/attendus/test_01..26.json` | Réponses attendues (`"*"` = texte libre accepté). |
+| `copilot/tests/mails_de_test.md` | 55 mails de test + résultat attendu (côté agent ET côté script) décrit sous chacun, tous sur le client 64233008 ; factures : 19-22, 25, 27-55 (47 et 50-55 : N dernières factures ; 48 et 55 : modification puis factures). |
+| `copilot/tests/attendus/test_01..55.json` | Réponses attendues (`"*"` = texte libre accepté). `copilot/tests/mails_json/` : les mêmes mails, prêts à envoyer. |
 | `comparer_reponse_copilot.py` | Compare une réponse d'agent à l'attendu (ignore casse/accents/espaces). |
 
 ### Cartographie & divers
@@ -90,9 +90,17 @@ Client désigné par `nom_client`, `code_client` (7-8 chiffres) ou les deux.
 - **Notes :** ajouter / modifier / supprimer.
 - **Factures (lecture seule) :** `telecharger_facture_client` — duplicata PDF. Recherche par n° / dates (± 3 j) /
   montant TTC (± 1 %). 0 ou >1 résultat → rien n'est pris, la réponse liste les factures possibles.
-  `telecharger_factures_client` — toutes les factures validées d'une période (`periode_du`/`periode_au`) : étape
-  `pour_chaque_ligne` de la recette (liste le tableau A31, puis rejoue la recette d'une facture avec chaque numéro).
-  Arrêt sans rien télécharger si 0 facture, > 30, ou plusieurs clients (colonne A12).
+  `telecharger_factures_client` — factures validées de plusieurs dates et/ou périodes (`factures.periodes` =
+  « 31/01/2026 ; 01/03/2026 au 31/03/2026 », lu par `lire_periodes`) : étape `pour_chaque_periode`
+  (`executer_pour_chaque_periode`) qui joue la recette INTERNE `lister_factures_client` (ACTIONS_INTERNES, absente du
+  schéma de l'agent ; étape `collecter_lignes` du tableau A31) pour chaque date / période. Une date sans facture est
+  notée dans `etat['manquantes']` (factures à ± 15 j proposées) sans arrêt ; résultat de l'ordre : `manquantes`. Puis la
+  recette d'une facture est rejouée avec chaque numéro. Arrêt sans rien télécharger si 0 facture au total, > 30, ou
+  plusieurs clients (colonne A12). L'ancien format `periode_du`/`periode_au` est converti par `valider_ordres.py`.
+  `factures.nombre_dernieres` = N (« ses 3 dernières factures ») : seules les N plus récentes sont gardées (tri par
+  « Dt Fac » décroissante) ; sans `periodes`, recherche du 01/01/2000 à aujourd'hui. Moins de N trouvées → entrée
+  `manquantes` avec `nombre_demande`. Champ obligatoire : `periodes` OU `nombre_dernieres` (tuple dans
+  `CHAMPS_OBLIGATOIRES`). « Sa dernière facture » (une seule) reste `telecharger_facture_client` sans critère.
 - Désactivée : `modifier_activite_client` (dans `ACTIONS_DESACTIVEES`).
 
 ---
@@ -100,8 +108,10 @@ Client désigné par `nom_client`, `code_client` (7-8 chiffres) ou les deux.
 ## 4. Fonctionnalités transversales importantes
 
 - **Note de suivi automatique** : après chaque action réussie (fiche, règlement, document, duplicata de facture), le script ajoute une note sur la fiche (sujet = ce
-  qui a changé, message = ancienne → nouvelle valeur + extrait du mail, agent = GINESTE Thomas = valeur `39` de la
-  liste A28). Factures : `note_de_suivi(..., fichiers)` liste les n° des duplicatas récupérés, client = code lu dans le nom
+  qui a changé, message = ancienne → nouvelle valeur + extrait du mail, agent = « GINESTE Thomas », choisi PAR SON
+  NOM dans la liste A28 (étape `choisir_par_libelle` : la valeur technique diffère selon la base, le 39 de production =
+  HIRIART David en base de TEST) ; sujet limité à 50 caractères (`LONGUEUR_SUJET_NOTE` : EGESYS coupe au-delà ; la
+  vérification `ligne_presente` accepte un texte coupé d'au moins 20 caractères). Factures : `note_de_suivi(..., fichiers)` liste les n° des duplicatas récupérés, client = code lu dans le nom
   du PDF (`facture_<code>_<n°>.pdf`) ; pas de note si aucun PDF. Les actions sur les notes n'ajoutent pas de note.
   L'agent Copilot a pour consigne de NE PAS créer lui-même ces notes.
 - **Civilité** (règle SOGEN du 16/11/2026) : plus de MADAME / MONSIEUR / MADEMOISELLE / MESSIEURS / VEUVE ; une personne
@@ -139,10 +149,31 @@ Client désigné par `nom_client`, `code_client` (7-8 chiffres) ou les deux.
 - Upload = POST multipart dans un ordre précis (voir `uploader_fichier_webdev`), déclenché avant le clic de validation.
 - Sélection d'une ligne de tableau = POST AJAX `AJAXCHAMP`/`CLICTABLE` (+ parfois un `AJAXPAGE`).
 - `A2` sur la page « Gestion des clients » = « page précédente », pas « accueil » → étape `remonter_jusqu_a` dans la
-  recette facture.
+  recette facture. La fiche client porte AUSSI le titre « Gestion des clients » mais n'a pas d'A2 (flèche retour = A3,
+  image `IMAGE_BOUTON_RETOUR`) et M3 n'en sort pas : `remonter_jusqu_a` clique alors la flèche retour.
+- Constaté le 19/11/2026 (base de TEST, lecture seule) : la flèche retour de la fiche client (A3) n'a PAS l'image
+  `IMAGE_BOUTON_RETOUR` (`btn_195aa…` au lieu de `btn_4304…`) → la fiche est reconnue à son tableau des notes A160
+  (`est_fiche_client`) et on clique A3. EGESYS n'envoie qu'une partie des lignes d'un tableau (32 notes sur 35 :
+  attribut `NOMBRE` du XML = total) : si la note ajoutée n'est pas lue, `ligne_presente` l'accepte quand le total
+  a augmenté de 1 (`nombres_lignes_tables`, `etat['nombres_tables']`).
+- Entre deux ordres d'un même mail : `revenir_a_l_accueil` (19/11/2026, procédure manuelle de l'utilisateur) :
+  fiche client → « Enregistrer » (A4), flèche retour A3 si besoin, puis maison A2 jusqu'au Tableau de bord. Les clics
+  de navigation envoient le formulaire COMPLET (`valeurs_formulaire`), comme un navigateur : après un Enregistrer,
+  A2 envoyé seul ne faisait rien. Si A2 reste sans effet 2 fois : déconnexion + reconnexion (`etat['identifiants']`,
+  en mémoire seulement). Ancienne description : (Tableau de bord ou Menu Général ; flèche retour, puis A2
+  `IMAGE_BOUTON_PRECEDENT`, sinon M3). Sur le Menu Général, « Fiches client » = M11 : un clic M3 d'une recette y est
+  remplacé par M11.
 - Clés d'étape d'une recette : `requete`, `audit` (`titre_page`, `champs_modifies`, `ignorer_vides`, `ligne_presente`,
   `ligne_absente`, `ligne_unique`), `upload`, `upload_webdev`, `selection_ligne`, `conserver_valeurs_actuelles`,
-  `telechargement`, `remonter_jus_qu_a`.
+  `telechargement`, `remonter_jusqu_a`, `lire` (valeur d'un champ → `etat['lectures']`, ex. A205), `pour_chaque_ligne`
+  (plus utilisée), `collecter_lignes` (lignes d'un tableau → `etat['collecte']`, sans rien sélectionner),
+  `pour_chaque_periode` (étape sans `requete` : boucle sur les dates de `periodes`).
+- Recettes internes (`ACTIONS_INTERNES`, ex. `lister_factures_client`) : sous-étapes d'autres recettes, exclues du schéma
+  de l'agent par `extraire_ordres.generer_schema` (donc refusées si l'agent les envoie). Une recette dont les variables
+  client n'apparaissent pas dans une `requete` doit les citer ailleurs (ex. `"client": ['{code_client}', '{nom_client}']`),
+  sinon `code_client` / `nom_client` disparaissent du modèle JSON de l'agent.
+- Sujet de note de suivi : 60 caractères au plus (coupé avec « … ») ; pour plusieurs factures, dates courtes
+  (« 31/05/26 ; 01/03/26-31/03/26 »).
 
 ---
 
@@ -193,8 +224,9 @@ Client désigné par `nom_client`, `code_client` (7-8 chiffres) ou les deux.
 - **Demander avant toute connexion ou écriture dans EGESYS.** L'exploration en lecture seule sur un client de test est OK
   une fois le cadre posé ; toute écriture (créer/modifier/supprimer) se fait avec un feu vert explicite, et c'est
   l'utilisateur qui lance les vraies exécutions d'écriture.
-- Clients de test : **guitton** (fiche, notes, modèles, documents) et **brana** (factures ; code client 64233004 ;
-  guitton n'a pas de facture).
+- Client de test : **uniquement le code client 64233008** depuis le 19/11/2026 (tous les tests, mails de test Copilot compris ;
+  factures connues 31/01/2019 et 31/03/2019 d'après GENICIA++, à vérifier dans EGESYS). Anciens clients de test (guitton,
+  brana 64233004) : ne plus les utiliser.
 - **Ne jamais afficher ni coder en dur le mot de passe.** Identifiants via variable d'environnement.
 - **Toujours se déconnecter** (M37) — sinon EGESYS refuse les connexions suivantes (ERR_ALREADYCONNECTED).
 - **Ne pas modifier le moteur (`moteur_egesys.py`) sans demande explicite.** Nouvelles fonctionnalités = nouvelle recette
@@ -207,7 +239,16 @@ Client désigné par `nom_client`, `code_client` (7-8 chiffres) ou les deux.
 
 ---
 
-## 10. État au 2026-11-11
+## 10. État au 2026-11-19
+
+- **Base de TEST** depuis le 17/11/2026 (`moteur_egesys.connexion_egesys`, `?p1=TEST`) ; production = `http://egesys.sogen.coop/eGESYS`.
+- Mail au client avec ses factures (17/11) : testé en réel par l'utilisateur.
+- Factures à plusieurs dates et/ou périodes (19/11) : testé HORS CONNEXION (validation, boucle avec EGESYS simulé,
+  compte rendu, mail client, sujet de note). **Exécution réelle à faire lancer par l'utilisateur** : mail de test 27
+  (client 64233008).
+- Agent Copilot : « cheptel » / « numéro d'élevage » = code client (règle 6 des instructions et description du champ).
+
+### État au 2026-11-11
 
 La chaîne complète fonctionne en réel : mail → Power Automate → agent → `pending/` → workflow → EGESYS →
 `completed/`/`error/` → `result/` → réponse HTML dans Outlook (avec `id_message` et `expediteur`).

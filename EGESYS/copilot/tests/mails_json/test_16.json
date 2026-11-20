@@ -1,5 +1,5 @@
 {
   "destinataire": "thomas.gineste@sogen.coop",
-  "objet": "[EGSYS] [TEST 16] Erreur de saisie BIC Guitton",
-  "corps": "<p>Bonjour,</p><p>Sur le modèle de règlement de Mme Guitton du 01/11/2026, le BIC saisi est erroné.<br>Le bon BIC est PSSTFRPPXXX. Le reste est correct.</p><p>La comptabilité</p>"
+  "objet": "[EGSYS] [TEST 16] Erreur de saisie BIC 64233008",
+  "corps": "<p>Bonjour,</p><p>Sur le modèle de règlement du client 64233008 du 01/11/2026, le BIC saisi est erroné.<br>Le bon BIC est PSSTFRPPXXX. Le reste est correct.</p><p>La comptabilité</p>"
 }

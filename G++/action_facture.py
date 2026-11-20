@@ -30,10 +30,11 @@ Plusieurs factures sur une période (telecharger_factures, relevé le 17/11/2026
 """
 import os
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import genicia_auto as g
-from ordres_genicia import MAX_FACTURES   # au-delà, la demande est refusée (période à réduire), comme sur EGESYS
+from action_mail_eleveur import MAILS_BILAN, mail_des_coordonnees
+from ordres_genicia import DEBUT_HISTORIQUE, MAX_FACTURES, libelle_dernieres, libelle_periode   # au-delà de MAX_FACTURES : refus (comme sur EGESYS)
 
 # Colonnes des listes (étiquettes de chaque ligne, dans l'ordre)
 COL_BILAN = {"date": 2, "transaction": 4, "debit": 5, "type": 8}
@@ -62,6 +63,14 @@ def _ouvrir_bilan(d, cheptel: str, debut: str):
     g.aller_a(d, "Administratif > Bilan Eleveur")
     g.attendre_ecran("Recherche éleveur")
     g.rechercher_eleveur(d, cheptel, lambda: g.titre_fenetre_principale() == "BILAN ELEVEUR")
+    # Adresse mail de l'éleveur, affichée ici (« Coordonnées : … Email : … ») : plus besoin d'ouvrir sa fiche
+    if cheptel not in MAILS_BILAN:
+        try:
+            adresse = mail_des_coordonnees(d)
+            if adresse is not None:
+                MAILS_BILAN[cheptel] = adresse
+        except Exception as erreur:          # ne fait jamais échouer la récupération des factures
+            g.journal(f"adresse mail non lue dans « Coordonnées » ({erreur})")
 
     g.ecrire(_champ(d, "Début"), debut)
     g.cliquer(d, "VALIDER (F12)")
@@ -97,6 +106,7 @@ def _verifier_numero(d, numero: str, timeout: float = 15):
     while True:
         affiches = [g._texte_libelle(g._nom(l)).replace(" ", "") for l in g.visibles(d, "label")]
         if f"facturen°{numero}" in affiches:
+            g.journal(f"n° de facture affiché vérifié : {numero}")
             return
         if time.time() > fin:
             vus = [a for a in affiches if a.startswith("facturen°")]
@@ -121,9 +131,12 @@ def _enregistrer_pdf(d, chemin_pdf: str, numero: str = ""):
     g.ecrire(g.champ_par_libelle(dlg, "Nom du fichier"), chemin_pdf)
     g.cliquer_souris(dlg, "Confirmer", "push button")
 
+    g.journal(f"attente de l'écriture du PDF : {os.path.basename(chemin_pdf)}")
+    g._attente(f"écriture du PDF {os.path.basename(chemin_pdf)}")
     fin = time.time() + 60                 # attend que le fichier soit écrit
     while time.time() < fin:
         if os.path.exists(chemin_pdf) and not g.dialogue_ouvert("Enregistrement du rapport en PDF ..."):
+            g.journal(f"PDF écrit ({os.path.getsize(chemin_pdf)} octets)")
             return
         g.pause(0.5)
     raise TimeoutError(f"Le PDF n'a pas été créé : {chemin_pdf}")
@@ -131,6 +144,7 @@ def _enregistrer_pdf(d, chemin_pdf: str, numero: str = ""):
 
 def _fermer_boites(d):
     """Referme les boîtes ouvertes par l'action, sans rien imprimer ni valider."""
+    g.journal(f"fermeture des boîtes ouvertes : {g.dialogues_ouverts() or 'aucune'}")
     if g.dialogue_ouvert("Enregistrement du rapport en PDF ..."):
         g.trouver(g.attendre_dialogue(d, "Enregistrement du rapport en PDF ..."), "Annuler", "push button").click()
         g.pause(1)
@@ -214,31 +228,86 @@ def _revenir_a_l_analyse(d):
     g.attendre_ecran(ECRAN_ANALYSE)
 
 
-def telecharger_factures(d, cheptel: str, periode_du: str, periode_au: str, dossier: str) -> list[dict]:
-    """Enregistre le duplicata PDF de chaque facture du cheptel datée du `periode_du` au `periode_au` (JJ/MM/AAAA,
-    inclus). Renvoie [{"chemin", "numero", "date"}] dans l'ordre chronologique.
+def _plus_proches(toutes, du: date, au: date, nombre: int = 2) -> str:
+    """« n° 4500… du 31/01/2026, n° 4500… du 28/02/2026 » : factures du bilan les plus proches d'une date ou période
+    sans facture (aide pour l'utilisateur), ou "" s'il n'y en a aucune dans la liste lue."""
+    def ecart(facture):
+        jour = datetime.strptime(facture[1], "%d/%m/%Y").date()
+        return (du - jour).days if jour < du else (jour - au).days
+    proches = sorted(sorted(toutes, key=ecart)[:nombre], key=lambda f: datetime.strptime(f[1], "%d/%m/%Y"))
+    return ", ".join(f"n° {numero} du {jour}" for numero, jour in proches)
 
-    LookupError si aucune facture sur la période ou s'il y en a plus de MAX_FACTURES (rien n'est enregistré).
-    En cas d'erreur en cours de route, les PDF déjà enregistrés par cet appel sont supprimés (tout ou rien).
+
+def telecharger_factures(d, cheptel: str, periodes: list[tuple[date, date]], dossier: str,
+                         dernieres: int = 0) -> dict:
+    """Enregistre le duplicata PDF de chaque facture du cheptel datée dans l'une des `periodes` ([(début, fin)],
+    bornes incluses ; début = fin pour une date précise).
+
+    Une date ou période sans facture N'ARRÊTE PAS la demande : elle est notée (avec les factures les plus proches)
+    et les autres sont récupérées. Renvoie {"factures": [{"chemin", "numero", "date"}] (ordre chronologique),
+    "manquantes": [{"periode": « le 31/01/2026 » / « du … au … », "raison": …}]}.
+
+    LookupError (rien n'est enregistré) si aucune facture sur l'ensemble des dates, ou plus de MAX_FACTURES.
+    En cas d'erreur technique en cours de route, les PDF déjà enregistrés par cet appel sont supprimés (tout ou rien).
+
+    dernieres = N : seules les N factures les plus récentes sont gardées (« ses 3 dernières factures ») ; sans
+    `periodes`, tout le bilan de l'éleveur est lu (depuis DEBUT_HISTORIQUE). Moins de N factures : entrée
+    « manquantes » avec "nombre_demande".
     """
-    du = datetime.strptime(periode_du, "%d/%m/%Y").date()
-    au = datetime.strptime(periode_au, "%d/%m/%Y").date()
+    toutes_dates = not periodes
+    if toutes_dates:
+        if not dernieres:
+            raise ValueError("Ni dates ni nombre de dernières factures")
+        periodes = [(DEBUT_HISTORIQUE, date.today())]
+    debut, fin = min(du for du, _ in periodes), max(au for _, au in periodes)
+    # liste lue un mois avant la 1re date : permet de proposer la facture la plus proche d'une date sans facture
+    debut_liste, fin_liste = (debut - timedelta(days=31)).strftime("%d/%m/%Y"), fin.strftime("%d/%m/%Y")
     os.makedirs(dossier, exist_ok=True)
     enregistrees = []
     try:
-        _ouvrir_bilan(d, cheptel, periode_du)
-        factures = factures_de_la_periode(_afficher_periode(d, periode_du, periode_au), du, au)
+        _ouvrir_bilan(d, cheptel, debut_liste)
+        lignes = _afficher_periode(d, debut_liste, fin_liste)
+        toutes = factures_de_la_periode(lignes, date.min, date.max)
+        retenues, manquantes = {}, []
+        for du, au in periodes:
+            trouvees = factures_de_la_periode(lignes, du, au)
+            libelle = libelle_periode(du, au)
+            if trouvees:
+                print(f"   {libelle} : {len(trouvees)} facture(s) : " + ", ".join(n for n, _ in trouvees))
+                retenues.update(dict(trouvees))
+                continue
+            if toutes_dates:
+                break
+            proches = _plus_proches(toutes, du, au)
+            raison = ("aucune facture à cette date" if du == au else "aucune facture sur cette période") \
+                + " dans le bilan de l'éleveur"
+            if proches:
+                raison += f" (factures les plus proches : {proches})"
+            manquantes.append({"periode": libelle, "raison": raison})
+            print(f"   {libelle} : {raison}")
+        factures = sorted(retenues.items(), key=lambda f: datetime.strptime(f[1], "%d/%m/%Y"))
+        if dernieres and factures:
+            factures = factures[-dernieres:]          # les N plus récentes (toujours dans l'ordre chronologique)
+            print(f"   {libelle_dernieres(dernieres).capitalize()} : "
+                  + ", ".join(f"n° {n} du {j}" for n, j in reversed(factures)))
+            if len(factures) < dernieres:
+                manque = {"periode": libelle_dernieres(dernieres), "nombre_demande": dernieres,
+                          "raison": f"seulement {len(factures)} facture(s) trouvée(s)"
+                                    + (" pour cet éleveur" if toutes_dates else " sur les dates demandées")}
+                manquantes.append(manque)
+                print(f"   {manque['periode']} : {manque['raison']}")
+        if not factures and toutes_dates:
+            raise LookupError("Aucune facture pour les dates demandées : aucune facture dans le bilan de l'éleveur")
         if not factures:
-            raise LookupError(f"Aucune facture du {periode_du} au {periode_au} dans le bilan de l'éleveur.")
+            raise LookupError("Aucune facture pour les dates demandées : "
+                              + " ; ".join(f"{m['periode']} : {m['raison']}" for m in manquantes))
         if len(factures) > MAX_FACTURES:
-            raise LookupError(f"Trop de factures du {periode_du} au {periode_au} : {len(factures)} "
+            raise LookupError(f"Trop de factures pour les dates demandées : {len(factures)} "
                               f"(maximum {MAX_FACTURES}). Période à réduire.")
-        print(f"   {len(factures)} facture(s) du {periode_du} au {periode_au} : "
-              + ", ".join(n for n, _ in factures))
 
         for rang, (numero, date_facture) in enumerate(factures, start=1):
             if rang > 1:      # la liste est relue à chaque tour : on retrouve la facture par son n°
-                lignes = _afficher_periode(d, periode_du, periode_au)
+                lignes = _afficher_periode(d, debut_liste, fin_liste)
             else:
                 lignes = _lignes_completes(d)
             index = next((i for i, l in enumerate(lignes) if _numero_facture(l) == numero), None)
@@ -253,7 +322,7 @@ def telecharger_factures(d, cheptel: str, periode_du: str, periode_au: str, doss
             enregistrees.append({"chemin": chemin, "numero": numero, "date": date_facture})
             _fermer_boites(d)
             _revenir_a_l_analyse(d)
-        return enregistrees
+        return {"factures": enregistrees, "manquantes": manquantes}
     except BaseException:
         for facture in enregistrees:          # tout ou rien : pas de PDF isolé joint à un ordre en erreur
             try:

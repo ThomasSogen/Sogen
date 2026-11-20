@@ -455,7 +455,7 @@ Enregistrer le duplicata PDF d'UNE facture validée du client (aucune modificati
 
 ### `telecharger_factures_client`
 
-Enregistrer le duplicata PDF de TOUTES les factures validées du client sur une période (ex : un mois, un trimestre, une année ; 30 factures maximum). Aucune modification dans EGESYS. Champs obligatoires : `periode_du`, `periode_au`.
+Enregistrer le duplicata PDF de PLUSIEURS factures validées du client : toutes celles de une ou plusieurs dates précises et/ou périodes (ex : un mois, un trimestre, une année ; 30 factures maximum), ou les N dernières factures (« ses 3 dernières factures »). Une date ou une période sans facture n'arrête pas la demande : les factures trouvées sont envoyées et les manques expliqués. Aucune modification dans EGESYS. Champs obligatoires : `periodes` ou `nombre_dernieres`.
 
 ```json
 {
@@ -464,8 +464,8 @@ Enregistrer le duplicata PDF de TOUTES les factures validées du client sur une 
   "code_client": "",
   "nom_client": "",
   "factures": {
-    "periode_au": "",
-    "periode_du": ""
+    "nombre_dernieres": "",
+    "periodes": ""
   }
 }
 ```
@@ -514,8 +514,8 @@ Enregistrer le duplicata PDF de TOUTES les factures validées du client sur une 
 | `date_realisation` | facture | Date de réalisation (date) de la facture JJ/MM/AAAA, même approximative. | texte libre |
 | `montant` | facture | Montant TTC de la facture (ex : 652,49), même approximatif. | texte libre |
 | `numero_facture` | facture | Numéro de facture complet (13 chiffres, ex : 4500000012345) s'il est cité, sinon vide. | texte libre |
-| `periode_au` | factures | Dernier jour de la période des factures demandées, JJ/MM/AAAA (ex : mars 2026 → 31/03/2026). | texte libre |
-| `periode_du` | factures | Premier jour de la période des factures demandées, JJ/MM/AAAA (ex : mars 2026 → 01/03/2026). | texte libre |
+| `nombre_dernieres` | factures | Nombre des dernières factures demandées, en chiffres (« ses 3 dernières factures » → "3"), sinon vide. Seules les plus récentes sont prises (parmi les dates de "periodes" si elles sont données, sinon parmi toutes les factures du client). | texte libre |
+| `periodes` | factures | Dates et/ou périodes des factures demandées, séparées par « ; ». Une date précise : JJ/MM/AAAA ; une période : JJ/MM/AAAA au JJ/MM/AAAA (premier et dernier jour inclus). Ex : « la facture du 31 janvier et celles de mars 2026 » → "31/01/2026 ; 01/03/2026 au 31/03/2026". | texte libre |
 
 # Exemples de mails traités
 
@@ -711,33 +711,67 @@ Points d'attention :
 }
 ```
 
-## Exemple 5 : duplicatas de toutes les factures d'un mois
+## Exemple 5 : duplicatas des factures d'un mois et d'une date précise
 
 ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX06`
 Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
 
 Mail reçu :
 
-> Bonjour, M. Dupont souhaite recevoir un duplicata de toutes ses factures du mois de mars 2026. Merci.
+> Bonjour, M. Dupont souhaite recevoir un duplicata de toutes ses factures du mois de mars 2026, ainsi que de sa facture du 31 mai 2026. Merci.
 
 Points d'attention :
-- Plusieurs factures sur une période : UN seul ordre « telecharger_factures_client », ce n'est pas une incertitude.
-- « mars 2026 » = du premier au dernier jour du mois.
+- Plusieurs factures (période + date précise) : UN seul ordre « telecharger_factures_client », ce n'est pas une incertitude.
+- « mars 2026 » = 01/03/2026 au 31/03/2026 ; la date précise s'ajoute après « ; ».
 
 ```json
 {
-  "resume": "Duplicatas de toutes les factures de mars 2026 pour M. Dupont.",
+  "resume": "Duplicatas des factures de mars 2026 et de la facture du 31/05/2026 pour M. Dupont.",
   "id_message": "AAMkXXXXXXXXXXXX06",
   "expediteur": "gestionnaire@exemple.fr",
   "ordres": [
     {
       "action": "telecharger_factures_client",
-      "justification": "M. Dupont souhaite recevoir un duplicata de toutes ses factures du mois de mars 2026.",
+      "justification": "M. Dupont souhaite recevoir un duplicata de toutes ses factures du mois de mars 2026, ainsi que de sa facture du 31 mai 2026.",
       "code_client": "",
       "nom_client": "dupont",
       "factures": {
-        "periode_au": "31/03/2026",
-        "periode_du": "01/03/2026"
+        "nombre_dernieres": "",
+        "periodes": "01/03/2026 au 31/03/2026 ; 31/05/2026"
+      }
+    }
+  ],
+  "incertitudes": []
+}
+```
+
+## Exemple 5 bis : les dernières factures, sans date
+
+ID du message fourni dans la requête : `AAMkXXXXXXXXXXXX07`
+Expéditeur fourni dans la requête : `gestionnaire@exemple.fr`
+
+Mail reçu :
+
+> Bonjour, le client 1234567 voudrait recevoir ses trois dernières factures. Merci.
+
+Points d'attention :
+- « ses trois dernières factures » : "nombre_dernieres" = "3", "periodes" vide. Ce n'est pas une incertitude : le programme prend les 3 plus récentes.
+- « sa dernière facture » (une seule) → « telecharger_facture_client » sans critère (exemple 4).
+
+```json
+{
+  "resume": "Duplicatas des 3 dernières factures du client 1234567.",
+  "id_message": "AAMkXXXXXXXXXXXX07",
+  "expediteur": "gestionnaire@exemple.fr",
+  "ordres": [
+    {
+      "action": "telecharger_factures_client",
+      "justification": "le client 1234567 voudrait recevoir ses trois dernières factures.",
+      "code_client": "1234567",
+      "nom_client": "",
+      "factures": {
+        "nombre_dernieres": "3",
+        "periodes": ""
       }
     }
   ],

@@ -23,9 +23,9 @@ from pathlib import Path
 import genicia_auto as g
 from action_espace_adherent import generer_espace_adherent, verifier_espace_adherent
 from action_facture import telecharger_facture, telecharger_factures
-from action_mail_eleveur import lire_mail_eleveur
+from action_mail_eleveur import MAILS_BILAN, lire_mail_eleveur
 from file_attente_genicia import GeniciaOccupe, tour_genicia
-from ordres_genicia import lire_date
+from ordres_genicia import libelle_dernieres, libelle_periode, lire_date, lire_periodes
 
 DOSSIER_FACTURES = Path(__file__).with_name("factures")
 MAILS_LUS = {}   # cheptel -> adresse mail de la fiche (lue une seule fois par exécution)
@@ -33,7 +33,10 @@ MAILS_LUS = {}   # cheptel -> adresse mail de la fiche (lue une seule fois par e
 
 def mail_eleveur(d, cheptel):
     """Adresse mail de l'éleveur, pour lui envoyer ses factures. Ne fait jamais échouer l'ordre : '' en cas de souci."""
-    if cheptel not in MAILS_LUS:
+    if cheptel not in MAILS_LUS and cheptel in MAILS_BILAN:     # lue sur BILAN ELEVEUR (« Coordonnées »)
+        MAILS_LUS[cheptel] = MAILS_BILAN[cheptel]
+        print(f"   Adresse mail de l'éleveur (Coordonnées) : {MAILS_LUS[cheptel] or 'aucune'}")
+    if cheptel not in MAILS_LUS:             # secours : zone « Coordonnées » illisible -> fiche de l'éleveur
         try:
             MAILS_LUS[cheptel] = lire_mail_eleveur(d, cheptel)
             print(f"   Adresse mail de l'éleveur : {MAILS_LUS[cheptel] or 'aucune sur la fiche'}")
@@ -83,14 +86,23 @@ def executer_facture(d, ordre, dossier):
 
 
 def executer_factures(d, ordre, dossier):
-    du, au = ordre["periode_du"], ordre["periode_au"]
-    factures = telecharger_factures(d, ordre["cheptel"], du, au, str(dossier))
+    periodes = lire_periodes(ordre["periodes"]) if ordre.get("periodes") else []
+    dernieres = int(ordre.get("nombre_dernieres") or 0)
+    resultat = telecharger_factures(d, ordre["cheptel"], periodes, str(dossier), dernieres)
+    factures, manquantes = resultat["factures"], resultat["manquantes"]
     n, s = len(factures), "s" if len(factures) > 1 else ""
-    detail = f"{n} duplicata{s} de facture du {du} au {au} récupéré{s}."
-    modification = ([f"Période : du {du} au {au}"]
+    detail = f"{n} duplicata{s} de facture récupéré{s}" + (
+        f" ; {len(manquantes)} date(s) ou période(s) sans facture." if manquantes else ".")
+    demandees = " ; ".join(libelle_periode(du, au) for du, au in periodes)
+    if dernieres:
+        demandees = libelle_dernieres(dernieres) + (f" ({demandees})" if demandees else "")
+    modification = ([f"Factures demandées : {demandees}"]
                     + [f"Facture n° {f['numero']} du {f['date']}" for f in factures]
-                    + [f"{n} duplicata{s} PDF joint{s} à ce mail"])
-    infos = {"mail_client": mail_eleveur(d, ordre["cheptel"]), "periode_du": du, "periode_au": au,
+                    + [f"{n} duplicata{s} PDF joint{s} à ce mail"]
+                    + [f"Non trouvée : {m['periode']} : {m['raison']}" for m in manquantes])
+    infos = {"mail_client": mail_eleveur(d, ordre["cheptel"]), "periodes": ordre["periodes"],
+             "nombre_dernieres": ordre.get("nombre_dernieres", ""),
+             "manquantes": manquantes,
              "factures": [{"numero_facture": f["numero"], "date_facture": f["date"]} for f in factures]}
     infos["espace_adherent"], lignes = espace_eleveur(d, ordre["cheptel"])
     return detail, [Path(f["chemin"]).name for f in factures], modification + lignes, infos
@@ -160,6 +172,7 @@ def piloter(ordres, resultats, dossier, fichier_resultats):
     """Connexion, exécution de chaque ordre, fermeture de GENICIA++ (appelé quand c'est notre tour)."""
     print(f"{datetime.now():%d/%m/%Y %H:%M:%S} Connexion à GENICIA++...")
     try:
+        g.demarrer_debloqueur()      # clic dans une zone vide si GENICIA++ reste bloqué (voir genicia_auto)
         d = g.lancer_et_connecter()
         g.quitter_ecran(d)
     except BaseException as erreur:                       # SystemExit compris (identifiants absents)
@@ -174,8 +187,14 @@ def piloter(ordres, resultats, dossier, fichier_resultats):
         if arret:
             r["detail"] = arret
             continue
-        print(f"\n{datetime.now():%H:%M:%S} Ordre {r['numero']} : {ordre['action']} — cheptel {ordre['cheptel']}")
+        qui = f"cheptel {ordre['cheptel']}" if ordre["cheptel"] else f"éleveur « {ordre.get('nom_eleveur', '')} »"
+        print(f"\n{datetime.now():%H:%M:%S} Ordre {r['numero']} : {ordre['action']} — {qui}")
         try:
+            if not ordre["cheptel"]:   # éleveur désigné par son nom : n° de cheptel retrouvé dans GENICIA++
+                ordre["cheptel"] = r["cheptel"] = g.identifier_cheptel(d, ordre.get("nom_eleveur", ""))
+                print(f"   Éleveur « {ordre.get('nom_eleveur', '')} » : cheptel {ordre['cheptel']}")
+                if ordre["action"] == "generer_espace_adherent":
+                    ESPACES_DEMANDES.add(ordre["cheptel"])
             r["detail"], r["fichiers"], lignes, infos = ACTIONS[ordre["action"]](d, ordre, dossier)
             r["modification"] = "\n".join(lignes)
             r.update(infos)          # factures : mail_client, factures [{numero_facture, date_facture}]... (mail client)

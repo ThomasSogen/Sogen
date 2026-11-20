@@ -99,7 +99,7 @@ les écrire.
 | Action | Résultat |
 |---|---|
 | `telecharger_facture_client` | Télécharge le **duplicata PDF** d'**une** facture validée en comptabilité. Rien n'est modifié dans EGESYS. |
-| `telecharger_factures_client` | Télécharge le duplicata PDF de **toutes** les factures validées du client sur une **période** (« toutes les factures de mars », « du 1er trimestre »…). Rien n'est modifié dans EGESYS. |
+| `telecharger_factures_client` | Télécharge le duplicata PDF de **plusieurs** factures validées du client : toutes celles de **plusieurs dates précises et/ou périodes** (« la facture du 31/01 et toutes celles de mars », « du 1er trimestre »…), ou ses **N dernières factures** (« ses 3 dernières factures », sans date : les N premières lignes du tableau, de la plus récente à la plus ancienne). Rien n'est modifié dans EGESYS. |
 
 **Une facture** — critères de recherche, tous facultatifs, recopiés du mail même s'ils sont approximatifs :
 
@@ -115,11 +115,18 @@ les écrire.
   montant) pour préciser la demande.
 - Aucun critère dans le mail → la facture validée la plus récente du client.
 
-**Toutes les factures d'une période** — `periode_du` et `periode_au` (obligatoires, bornes incluses, sur la date de
-facture ; « mars 2026 » → du 01/03/2026 au 31/03/2026) :
+**Plusieurs factures (dates et/ou périodes)** — champ `periodes` (obligatoire) du dossier `factures` : chaque date ou
+période séparée par « ; », une date précise = `JJ/MM/AAAA`, une période = `JJ/MM/AAAA au JJ/MM/AAAA` (bornes incluses,
+sur la date de facture). Ex. : « la facture du 31/01 et toutes celles de mars 2026 » → `"31/01/2026 ; 01/03/2026 au
+31/03/2026"` (l'ancien format `periode_du` / `periode_au` est encore accepté et converti) :
 
-- les factures validées de la période sont listées, puis chacune est téléchargée par son numéro exact, une à une ;
-- **rien n'est téléchargé** si aucune facture ne correspond, s'il y en a plus de **30** (période à réduire) ou si elles
+- chaque date / période est recherchée (recette interne `lister_factures_client`) ; **une date ou une période sans
+  facture n'arrête pas la demande** : elle est notée « Non trouvée » avec les factures les plus proches (± 15 jours) ;
+- toutes les factures trouvées sont ensuite téléchargées par leur numéro exact, une à une ; la réponse à l'utilisateur
+  et le mail au client listent les factures envoyées et les dates sans facture (objet « Demande traitée, factures
+  manquantes ») ;
+- **rien n'est téléchargé** si aucune facture ne correspond à aucune date, s'il y en a plus de **30** (périodes à
+  réduire) ou si elles
   appartiennent à **plusieurs clients** (nom ambigu : préciser le code client) ; la réponse liste les factures trouvées ;
 - chaque PDF est listé dans la réponse au mail et joint par Power Automate (dossier `result/pdf/`).
 
@@ -176,6 +183,8 @@ Pour chaque `pending/<nom>.json` :
 | Résultat | Code | Dossier | Exécuté dans EGESYS ? |
 |---|---|---|---|
 | Tout est correct | `EXECUTE` | `completed/` | Oui |
+| Factures à plusieurs dates : certaines dates sans facture | `EXECUTE` | `completed/` | Oui : les factures trouvées sont envoyées (objet « Demande traitée, factures manquantes ») |
+| Factures à plusieurs dates : aucune facture à aucune date | `A_PRECISER` | `error/` | Non (détail date par date) |
 | Incertitude de l'agent ou ordre refusé par la validation | `REFUSE_VALIDATION` | `error/` | Non |
 | Coordonnées bancaires (IBAN ou BIC) | `A_VERIFIER_BANQUE` | `error/` | Non : à confirmer auprès du client |
 | Facture : aucune ou plusieurs correspondent | `A_PRECISER` | `error/` | Non (les factures possibles sont listées) |
@@ -199,7 +208,7 @@ facture, pièces jointes) et `<nom>_resultat.json` (résultat technique : statut
 }
 ```
 
-L'objet dépend du résultat : « Demande traitée », « Demande partiellement traitée », « Précisions nécessaires »,
+L'objet dépend du résultat : « Demande traitée », « Demande traitée, factures manquantes », « Demande partiellement traitée », « Précisions nécessaires »,
 « Coordonnées bancaires à confirmer », « Facture à préciser », « Erreur lors du traitement », « Traitement interrompu, à
 vérifier dans EGESYS », « Demande non traitée ». Le corps est en HTML (gras, souligné, couleurs, listes) et ne contient
 aucun nom de fichier ni jargon : bilan coloré, demandes exécutées (ancienne → nouvelle valeur), demandes non exécutées
@@ -217,6 +226,8 @@ ont été récupérés, le JSON contient aussi :
   jamais du mail : une facture n'est jamais envoyée à une adresse inconnue.
 - `client.mail` est **vide** (rien à envoyer au client) si aucune facture n'a été récupérée, si la fiche n'a pas
   d'adresse valide, ou si les factures concernent plusieurs clients.
+- Pour une demande à plusieurs dates, le message rappelle les dates demandées et indique celles sans facture
+  (« Nous n'avons trouvé aucune facture le 15/08/2026. »).
 - Le message (objet « SOGEN : … », signé « Le service administratif de SOGEN ») se modifie dans
   `workflow/compte_rendu.py`, fonction `mail_client`. L'objet ne contient jamais « EGESYS ».
 - Dans le flux de réponse, après la réponse à l'utilisateur et **avant** de supprimer les PDF de `result/pdf/` : condition
@@ -246,6 +257,11 @@ Le script rejoue le parcours d'un utilisateur, page par page, puis **vérifie** 
 
 Les identifiants sont des variables d'environnement de l'utilisateur Windows (`EGESYS_IDENTIFIANT`, `EGESYS_MDP`),
 enregistrées par `lancer_workflow.bat -Identifiants`. Ils ne figurent dans aucun fichier du projet.
+
+**Base utilisée** : depuis le 17/11/2026, le script se connecte à la **base de TEST**
+(`http://egesys.sogen.coop/eGESYS/eGESYS?p1=TEST`). Pour revenir à la production, remplacer cette adresse par
+`http://egesys.sogen.coop/eGESYS` dans `connexion_egesys` de [moteur_egesys.py](moteur_egesys.py), puis redémarrer le
+workflow (`.\lancer_workflow.bat -Arreter`, puis `.\lancer_workflow.bat`).
 
 Boutons dangereux jamais utilisés : Supprimer, Inverser l'état R/V et transferts comptables (page Factures),
 Envoyer (page Détail facture, qui envoie la facture par mail au client).
@@ -287,7 +303,7 @@ Le PC doit être allumé, OneDrive synchronisé et le workflow lancé pour que l
 | [workflow/poste_actif.py](workflow/poste_actif.py) | Un seul PC à la fois (fichier `_poste_actif.json` dans le OneDrive EGESYS). Identique à celui de G++ |
 | [extraire_ordres.py](extraire_ordres.py) | Schéma des ordres (utilisé par la validation et la compétence) ; extraction par l'API Claude en option |
 | [generer_doc_copilot.py](generer_doc_copilot.py) | Génère la compétence SKILL.md de l'agent |
-| [copilot/](copilot/) | Instructions de l'agent, compétence générée, exemples, 26 mails de test et réponses attendues |
+| [copilot/](copilot/) | Instructions de l'agent, compétence générée, exemples, 55 mails de test et réponses attendues (n° 19 à 22, 25, 27 et 28 à 55 : factures, filtres, plusieurs dates et périodes, dates sans facture, N dernières factures) |
 | [comparer_reponse_copilot.py](comparer_reponse_copilot.py) | Compare une réponse de l'agent à la réponse attendue d'un mail de test |
 | [explorer.py](explorer.py) | Cartographie des pages EGESYS en lecture seule → [cartes/](cartes/) |
 | [envoyer_mails_test.py](envoyer_mails_test.py) | Mails de test : génère `copilot/tests/mails_json/test_XX.json` depuis `mails_de_test.md` et les dépose dans `OneDrive - Sogen\TESTS_MAILS`, d'où un flux Power Automate les envoie (objet `[EGSYS] [TEST XX] …`) |
@@ -310,3 +326,10 @@ Le PC doit être allumé, OneDrive synchronisé et le workflow lancé pour que l
 **Contraintes Copilot :** les textes chargés dans l'agent ne doivent contenir ni formulations du type « ignore tes
 instructions », ni données personnelles ou bancaires réalistes (noms réels, IBAN, téléphones, mails), sinon Microsoft
 bloque la création de l'agent (« violation IAR »). Les exemples utilisent des X et des noms génériques.
+
+## Plusieurs ordres dans un même mail
+
+Entre deux ordres, le programme revient toujours à l'accueil (Tableau de bord) avant d'exécuter l'ordre suivant :
+flèche « retour » des sous-pages (fiche client, note, document), puis « page précédente » des pages de menu. Sans ce
+retour, un ordre de factures lancé juste après une modification restait bloqué sur la fiche client (constaté le
+19/11/2026 avec le test 48). Si l'accueil n'est pas atteint en 15 clics, l'ordre s'arrête sans rien faire.

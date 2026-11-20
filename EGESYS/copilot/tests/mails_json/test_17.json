@@ -1,5 +1,5 @@
 {
   "destinataire": "thomas.gineste@sogen.coop",
-  "objet": "[EGSYS] [TEST 17] Mme Guitton - litige",
-  "corps": "<p>Bonjour,</p><p>Mme Guitton a un nouveau portable : 06 11 22 33 44.<br>Par ailleurs, merci d'ajouter une note confidentielle : elle conteste la facture n°2026-118 et un avoir est en cours<br>d'étude avec la direction.</p><p>Cordialement</p>"
+  "objet": "[EGSYS] [TEST 17] Client 64233008 - litige",
+  "corps": "<p>Bonjour,</p><p>Le client 64233008 a un nouveau portable : 06 11 22 33 44.<br>Par ailleurs, merci d'ajouter une note confidentielle : il conteste la facture n°2026-118 et un avoir est en cours<br>d'étude avec la direction.</p><p>Cordialement</p>"
 }

@@ -1,0 +1,16 @@
+{
+  "resume": "*",
+  "ordres": [
+    {
+      "action": "telecharger_factures_client",
+      "justification": "*",
+      "code_client": "64233008",
+      "nom_client": "",
+      "factures": {
+        "nombre_dernieres": "",
+        "periodes": "31/03/2019 ; 31/12/2027"
+      }
+    }
+  ],
+  "incertitudes": []
+}
